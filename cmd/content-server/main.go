@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
@@ -30,9 +32,19 @@ func main() {
 	server := contentrpc.NewGRPCServerWithMetrics(logger, metrics.New())
 	contentrpc.RegisterServer(server, contentrpc.NewServer(repo))
 	logger.InfoContext(context.Background(), "content_rpc_listening", "address", address)
-	if err := server.Serve(listener); err != nil {
-		logger.Error("content RPC stopped", "error", err)
-		os.Exit(1)
+	serverErrors := make(chan error, 1)
+	go func() { serverErrors <- server.Serve(listener) }()
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serverErrors:
+		if err != nil {
+			logger.Error("content RPC stopped", "error", err)
+			os.Exit(1)
+		}
+	case signal := <-shutdown:
+		logger.Info("content RPC shutdown signal received", "signal", signal.String())
+		server.GracefulStop()
 	}
 }
 
