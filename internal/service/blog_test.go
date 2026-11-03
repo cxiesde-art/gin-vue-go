@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSlugify(t *testing.T) {
 	for input, expected := range map[string]string{
@@ -20,5 +23,18 @@ func TestPageCount(t *testing.T) {
 		if actual := PageCount(total, int(size)); int64(actual) != expected {
 			t.Errorf("PageCount(%d, %d) = %d, want %d", total, size, actual, expected)
 		}
+	}
+}
+
+func TestNormalizeDisplayName(t *testing.T) {
+	name, err := NormalizeDisplayName("  Vue Reader  ")
+	if err != nil || name != "Vue Reader" {
+		t.Fatalf("unexpected normalized display name: %q error=%v", name, err)
+	}
+	if _, err := NormalizeDisplayName(""); err != ErrInvalidDisplayName {
+		t.Fatalf("empty display name error = %v, want %v", err, ErrInvalidDisplayName)
+	}
+	if _, err := NormalizeDisplayName(strings.Repeat("x", 121)); err != ErrInvalidDisplayName {
+		t.Fatalf("long display name error = %v, want %v", err, ErrInvalidDisplayName)
 	}
 }

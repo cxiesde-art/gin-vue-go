@@ -16,6 +16,7 @@ type Config struct {
 	ContentGRPCAddress       string
 	IdentityGRPCAddress      string
 	CommentGRPCAddress       string
+	ProfileGRPCAddress       string
 	AnalyticsGRPCAddress     string
 	TaxonomyGRPCAddress      string
 	SearchGRPCAddress        string
@@ -42,6 +43,7 @@ func FromEnv() Config {
 		ContentGRPCAddress:       env("BLOG_CONTENT_GRPC_ADDRESS", ""),
 		IdentityGRPCAddress:      env("BLOG_IDENTITY_GRPC_ADDRESS", ""),
 		CommentGRPCAddress:       env("BLOG_COMMENT_GRPC_ADDRESS", ""),
+		ProfileGRPCAddress:       env("BLOG_PROFILE_GRPC_ADDRESS", ""),
 		AnalyticsGRPCAddress:     env("BLOG_ANALYTICS_GRPC_ADDRESS", ""),
 		TaxonomyGRPCAddress:      env("BLOG_TAXONOMY_GRPC_ADDRESS", ""),
 		SearchGRPCAddress:        env("BLOG_SEARCH_GRPC_ADDRESS", ""),

@@ -53,9 +53,26 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (model.U
 	return user, err
 }
 
+func (r *Repository) FindUserByID(ctx context.Context, id uint) (model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).First(&user, id).Error
+	return user, err
+}
+
 func (r *Repository) CreateUser(ctx context.Context, user *model.User) error {
 	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 	return r.db.WithContext(ctx).Create(user).Error
+}
+
+func (r *Repository) UpdateUserDisplayName(ctx context.Context, id uint, displayName string) (model.User, error) {
+	result := r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Update("display_name", displayName)
+	if result.Error != nil {
+		return model.User{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return model.User{}, ErrNotFound
+	}
+	return r.FindUserByID(ctx, id)
 }
 
 func (r *Repository) ListCategories(ctx context.Context) ([]model.Category, error) {

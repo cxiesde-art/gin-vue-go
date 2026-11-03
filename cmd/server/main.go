@@ -20,6 +20,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/commentrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/postrpc"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/profilerpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/searchrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/taxonomyrpc"
 )
@@ -85,6 +86,20 @@ func main() {
 		defer commentClient.Close()
 		comments = commentClient
 		logger.Info("using distributed comments service", "address", cfg.CommentGRPCAddress)
+	}
+	var profile handler.ProfileProvider
+	var profileClient *profilerpc.Client
+	if cfg.ProfileGRPCAddress != "" {
+		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		profileClient, err = profilerpc.Dial(dialContext, cfg.ProfileGRPCAddress, logger)
+		cancel()
+		if err != nil {
+			logger.Error("connect to profile RPC", "address", cfg.ProfileGRPCAddress, "error", err)
+			os.Exit(1)
+		}
+		defer profileClient.Close()
+		profile = profileClient
+		logger.Info("using distributed profile service", "address", cfg.ProfileGRPCAddress)
 	}
 	var analytics handler.AnalyticsProvider
 	var analyticsClient *analyticsrpc.Client
@@ -157,7 +172,7 @@ func main() {
 		logger.Info("using distributed post service", "address", cfg.PostGRPCAddress)
 	}
 
-	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithAllDependencies(cfg, repo, reader, identity, comments, analytics, taxonomy, search, audit, posts, logger, metrics.New()).Router()}
+	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithAllDependenciesAndProfile(cfg, repo, reader, identity, comments, analytics, taxonomy, search, audit, posts, profile, logger, metrics.New()).Router()}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("blog API listening", "address", cfg.Address, "database", cfg.DatabaseURL)

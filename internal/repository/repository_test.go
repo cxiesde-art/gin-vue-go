@@ -21,6 +21,14 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.CreateUser(ctx, &user); err != nil {
 		t.Fatal(err)
 	}
+	foundUser, err := repo.FindUserByID(ctx, user.ID)
+	if err != nil || foundUser.DisplayName != "Author" {
+		t.Fatalf("unexpected user profile: %#v error=%v", foundUser, err)
+	}
+	updatedUser, err := repo.UpdateUserDisplayName(ctx, user.ID, "Updated Author")
+	if err != nil || updatedUser.DisplayName != "Updated Author" {
+		t.Fatalf("profile update failed: %#v error=%v", updatedUser, err)
+	}
 	if err := repo.CreateCategory(ctx, &model.Category{Name: "Go", Slug: "go"}); err != nil {
 		t.Fatal(err)
 	}

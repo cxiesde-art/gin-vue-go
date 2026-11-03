@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
@@ -16,6 +17,7 @@ import (
 var ErrInvalidPost = errors.New("title and content are required")
 var ErrInvalidStatus = errors.New("status must be draft or published")
 var ErrInvalidTaxonomy = errors.New("name is required")
+var ErrInvalidDisplayName = errors.New("display name must be between 1 and 120 characters")
 var slugPattern = regexp.MustCompile(`[^\pL\pN]+`)
 
 type BlogService struct {
@@ -156,4 +158,12 @@ func ValidateComment(name, email, body string) error {
 		return fmt.Errorf("name, email, and body are required")
 	}
 	return nil
+}
+
+func NormalizeDisplayName(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || utf8.RuneCountInString(value) > 120 {
+		return "", ErrInvalidDisplayName
+	}
+	return value, nil
 }

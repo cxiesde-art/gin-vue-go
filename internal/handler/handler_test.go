@@ -53,6 +53,14 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &login); err != nil {
 		t.Fatal(err)
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/me", nil, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"displayName":"Administrator"`)) {
+		t.Fatalf("profile lookup failed: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPatch, "/api/v1/me", map[string]string{"displayName": "Vue Administrator"}, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"displayName":"Vue Administrator"`)) {
+		t.Fatalf("profile update failed: %d %s", response.Code, response.Body.String())
+	}
 	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Published", "content": "hello", "status": "published"}, login.Token)
 	if response.Code != http.StatusCreated {
 		t.Fatalf("post creation failed: %d %s", response.Code, response.Body.String())
@@ -91,7 +99,7 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 		t.Fatalf("tag creation failed: %d %s", response.Code, response.Body.String())
 	}
 	response = request(t, router, http.MethodGet, "/api/v1/admin/audit-events", nil, login.Token)
-	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":3`)) {
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":4`)) {
 		t.Fatalf("audit events missing: %d %s", response.Code, response.Body.String())
 	}
 	response = request(t, router, http.MethodGet, "/api/v1/admin/outbox-events", nil, login.Token)
@@ -129,6 +137,21 @@ func (fakeIdentityProvider) Health(context.Context) error { return nil }
 func (fakeIdentityProvider) Validate(context.Context, string) (uint, string, error) {
 	return 9, "admin", nil
 }
+
+type fakeProfileProvider struct {
+	updated bool
+}
+
+func (p *fakeProfileProvider) Get(context.Context, uint) (model.User, error) {
+	return model.User{ID: 9, Email: "remote@example.com", DisplayName: "Remote reader", Role: "admin"}, nil
+}
+
+func (p *fakeProfileProvider) Update(context.Context, uint, string) (model.User, error) {
+	p.updated = true
+	return model.User{ID: 9, Email: "remote@example.com", DisplayName: "Updated remote", Role: "admin"}, nil
+}
+
+func (p *fakeProfileProvider) Health(context.Context) error { return nil }
 
 type fakeCommentProvider struct {
 	created bool
@@ -305,6 +328,29 @@ func TestRemoteIdentityProviderFeedsLoginRoute(t *testing.T) {
 	response := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]string{"email": "remote@example.com", "password": "secret"}, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"token":"remote-token"`)) {
 		t.Fatalf("gateway did not use remote identity: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteProfileProviderFeedsProfileRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := &fakeProfileProvider{}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithAllDependenciesAndProfile(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, nil, nil, nil, nil, nil, nil, profile, logging.NewText("profile-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/me", nil, "remote-token")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"displayName":"Remote reader"`)) {
+		t.Fatalf("gateway did not use remote profile read: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPatch, "/api/v1/me", map[string]string{"displayName": "Updated remote"}, "remote-token")
+	if response.Code != http.StatusOK || !profile.updated || !bytes.Contains(response.Body.Bytes(), []byte(`"displayName":"Updated remote"`)) {
+		t.Fatalf("gateway did not use remote profile update: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"profile":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote profile: %d %s", response.Code, response.Body.String())
 	}
 }
 

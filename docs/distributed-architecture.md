@@ -1,6 +1,6 @@
 # Distributed Architecture
 
-The deployment has nine service processes that share a SQLite volume in the default Compose example. A production deployment can move the database to a managed SQL service without changing the process boundaries.
+The deployment has eleven service processes that share a SQLite volume in the default Compose example, including the API and outbox worker. A production deployment can move the database to a managed SQL service without changing the process boundaries.
 
 ```text
 Vue client
@@ -11,6 +11,8 @@ Gin API :8080 ---- gRPC/JSON ----> Identity service :9091
     +---- gRPC/JSON ----> Content service :9090
     |
     +---- gRPC/JSON ----> Comments service :9092
+    |
+    +---- gRPC/JSON ----> Profile service :9098
     |
     +---- gRPC/JSON ----> Analytics service :9093
     |
@@ -25,7 +27,7 @@ Gin API :8080 ---- gRPC/JSON ----> Identity service :9091
     +---- audit_events + outbox_events ----> Outbox worker
 ```
 
-The identity service owns credential verification and token issuance. The API owns gateway authentication and delegates admin post CRUD and revision persistence to the posts service. The audit service owns transactional audit and outbox persistence. The content service owns public post reads. The search service owns full-text post search. The taxonomy service owns category and tag reads and writes. The comments service owns comment creation, listing, and moderation. The analytics service owns durable view events and aggregate view statistics. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
+The identity service owns credential verification and token issuance. The profile service owns authenticated display-name reads and updates. The API owns gateway authentication and delegates admin post CRUD and revision persistence to the posts service. The audit service owns transactional audit and outbox persistence. The content service owns public post reads. The search service owns full-text post search. The taxonomy service owns category and tag reads and writes. The comments service owns comment creation, listing, and moderation. The analytics service owns durable view events and aggregate view statistics. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
 
 Each HTTP request receives `X-Request-ID` and `X-Trace-ID` values. The gRPC client forwards both values as metadata, and the content server logs them with the RPC method, status code, and duration. The API exposes Prometheus-compatible counters at `/metrics` and dependency readiness at `/readyz`.
 

@@ -43,6 +43,11 @@ type IdentityProvider interface {
 	Validate(context.Context, string) (uint, string, error)
 }
 
+type ProfileProvider interface {
+	Get(context.Context, uint) (model.User, error)
+	Update(context.Context, uint, string) (model.User, error)
+}
+
 type CommentProvider interface {
 	List(context.Context, uint, bool) ([]model.Comment, error)
 	Create(context.Context, uint, string, string, string) (uint, string, error)
@@ -173,6 +178,10 @@ type localIdentityProvider struct {
 	jwtSecret string
 }
 
+type localProfileProvider struct {
+	repo *repository.Repository
+}
+
 func (p localIdentityProvider) Login(ctx context.Context, email, password string) (model.User, string, error) {
 	user, err := p.repo.FindUserByEmail(ctx, email)
 	if err != nil || !auth.CheckPassword(user.PasswordHash, password) {
@@ -193,12 +202,25 @@ func (p localIdentityProvider) Validate(_ context.Context, token string) (uint, 
 	return claims.UserID, claims.Role, nil
 }
 
+func (p localProfileProvider) Get(ctx context.Context, userID uint) (model.User, error) {
+	return p.repo.FindUserByID(ctx, userID)
+}
+
+func (p localProfileProvider) Update(ctx context.Context, userID uint, displayName string) (model.User, error) {
+	displayName, err := service.NormalizeDisplayName(displayName)
+	if err != nil {
+		return model.User{}, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return p.repo.UpdateUserDisplayName(ctx, userID, displayName)
+}
+
 type Handler struct {
 	cfg       config.Config
 	repo      *repository.Repository
 	service   *service.BlogService
 	reader    ContentReader
 	identity  IdentityProvider
+	profile   ProfileProvider
 	comments  CommentProvider
 	analytics AnalyticsProvider
 	taxonomy  TaxonomyProvider
@@ -250,6 +272,10 @@ func NewWithServicesAndAudit(cfg config.Config, repo *repository.Repository, rea
 }
 
 func NewWithAllDependencies(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, audit AuditProvider, posts AdminPostProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithAllDependenciesAndProfile(cfg, repo, reader, identity, comments, analytics, taxonomy, search, audit, posts, nil, logger, registry)
+}
+
+func NewWithAllDependenciesAndProfile(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, audit AuditProvider, posts AdminPostProvider, profile ProfileProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -259,6 +285,9 @@ func NewWithAllDependencies(cfg config.Config, repo *repository.Repository, read
 	}
 	if identity == nil {
 		identity = localIdentityProvider{repo: repo, jwtSecret: cfg.JWTSecret}
+	}
+	if profile == nil {
+		profile = localProfileProvider{repo: repo}
 	}
 	if comments == nil {
 		comments = localCommentProvider{repo: repo}
@@ -278,7 +307,7 @@ func NewWithAllDependencies(cfg config.Config, repo *repository.Repository, read
 	if posts == nil {
 		posts = localAdminPostProvider{service: blogService, repo: repo}
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, audit: audit, posts: posts, logger: logger, metrics: registry}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, profile: profile, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, audit: audit, posts: posts, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -291,6 +320,8 @@ func (h *Handler) Router() *gin.Engine {
 	api := router.Group("/api/v1")
 	api.Use(middleware.APIVersion("v1"))
 	api.POST("/auth/login", h.login)
+	api.GET("/me", middleware.RequireTokenValidator(h.identity), h.getProfile)
+	api.PATCH("/me", middleware.RequireTokenValidator(h.identity), h.updateProfile)
 	api.GET("/posts", h.listPublicPosts)
 	api.GET("/search", h.searchPosts)
 	api.GET("/categories", h.listCategories)
@@ -320,8 +351,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local", "audit": "local", "posts": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search, "audit": h.audit, "posts": h.posts} {
+	dependencies := gin.H{"content": "local", "identity": "local", "profile": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local", "audit": "local", "posts": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "profile": h.profile, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search, "audit": h.audit, "posts": h.posts} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -354,6 +385,45 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
+}
+
+func (h *Handler) getProfile(c *gin.Context) {
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	user, err := h.profile.Get(c.Request.Context(), claims.UserID)
+	if isNotFound(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *Handler) updateProfile(c *gin.Context) {
+	var input struct {
+		DisplayName string `json:"displayName"`
+	}
+	if !bindJSON(c, &input) {
+		return
+	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	user, err := h.profile.Update(c.Request.Context(), claims.UserID, input.DisplayName)
+	if errors.Is(err, service.ErrInvalidDisplayName) || status.Code(err) == codes.InvalidArgument {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if isNotFound(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	h.recordAudit(c, claims.UserID, "profile.updated", "user", claims.UserID, nil)
+	c.JSON(http.StatusOK, user)
 }
 
 func (h *Handler) listPublicPosts(c *gin.Context) {

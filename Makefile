@@ -1,4 +1,4 @@
-.PHONY: run run-content run-identity run-comments run-analytics run-taxonomy run-search run-audit run-posts run-worker test coverage fmt vet build build-content build-identity build-comments build-analytics build-taxonomy build-search build-audit build-posts build-worker
+.PHONY: run run-content run-identity run-comments run-profile run-analytics run-taxonomy run-search run-audit run-posts run-worker test coverage fmt vet build build-content build-identity build-comments build-profile build-analytics build-taxonomy build-search build-audit build-posts build-worker
 
 run:
 	go run ./cmd/server
@@ -11,6 +11,9 @@ run-identity:
 
 run-comments:
 	go run ./cmd/comment-server
+
+run-profile:
+	go run ./cmd/profile-server
 
 run-analytics:
 	go run ./cmd/analytics-server
@@ -56,6 +59,9 @@ build-identity:
 
 build-comments:
 	go build -o bin/comment-server ./cmd/comment-server
+
+build-profile:
+	go build -o bin/profile-server ./cmd/profile-server
 
 build-analytics:
 	go build -o bin/analytics-server ./cmd/analytics-server
