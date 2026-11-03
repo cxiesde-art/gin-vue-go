@@ -22,7 +22,7 @@ func Open(databaseURL string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}, &model.AuditEvent{}, &model.OutboxEvent{}, &model.PostRevision{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}, &model.AuditEvent{}, &model.OutboxEvent{}, &model.PostRevision{}, &model.ViewEvent{}); err != nil {
 		return nil, err
 	}
 	return &Repository{db: db}, nil
@@ -239,6 +239,16 @@ func (r *Repository) ListPostRevisions(ctx context.Context, postID uint) ([]mode
 	var revisions []model.PostRevision
 	err := r.db.WithContext(ctx).Where("post_id = ?", postID).Order("version DESC").Find(&revisions).Error
 	return revisions, err
+}
+
+func (r *Repository) CreateViewEvent(ctx context.Context, event *model.ViewEvent) error {
+	return r.db.WithContext(ctx).Create(event).Error
+}
+
+func (r *Repository) CountPostViews(ctx context.Context, postID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.ViewEvent{}).Where("post_id = ?", postID).Count(&count).Error
+	return count, err
 }
 
 func (r *Repository) SeedAdmin(ctx context.Context, email, passwordHash string) error {

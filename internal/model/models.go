@@ -88,3 +88,11 @@ type PostRevision struct {
 	EditorID  uint      `gorm:"index" json:"editorId"`
 	CreatedAt time.Time `json:"createdAt"`
 }
+
+type ViewEvent struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	PostID    uint      `gorm:"index;not null" json:"postId"`
+	RequestID string    `gorm:"index;not null" json:"requestId"`
+	TraceID   string    `gorm:"index;not null" json:"traceId"`
+	ViewedAt  time.Time `gorm:"index;not null" json:"viewedAt"`
+}

@@ -66,6 +66,12 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.CreatePostRevision(ctx, &model.PostRevision{PostID: post.ID, Title: post.Title, Content: post.Content, Status: post.Status, EditorID: user.ID}); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.CreateViewEvent(ctx, &model.ViewEvent{PostID: post.ID, RequestID: "request-1", TraceID: "trace-1", ViewedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	if views, err := repo.CountPostViews(ctx, post.ID); err != nil || views != 1 {
+		t.Fatalf("unexpected view count: views=%d error=%v", views, err)
+	}
 	revisions, err := repo.ListPostRevisions(ctx, post.ID)
 	if err != nil || len(revisions) != 1 || revisions[0].Version != 1 {
 		t.Fatalf("unexpected revisions: %#v error=%v", revisions, err)

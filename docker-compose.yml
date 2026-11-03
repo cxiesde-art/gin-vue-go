@@ -41,17 +41,33 @@ services:
     expose:
       - "9092"
 
+  analytics:
+    build:
+      context: .
+      args:
+        BINARY: analytics-server
+        COMMAND: ./cmd/analytics-server
+    command: ["/app/analytics-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9093"
+
   api:
     build: .
     depends_on:
       - content
       - identity
       - comments
+      - analytics
     environment:
       BLOG_DATABASE_URL: /data/blog.db
       BLOG_CONTENT_GRPC_ADDRESS: content:9090
       BLOG_IDENTITY_GRPC_ADDRESS: identity:9091
       BLOG_COMMENT_GRPC_ADDRESS: comments:9092
+      BLOG_ANALYTICS_GRPC_ADDRESS: analytics:9093
       BLOG_JWT_SECRET: change-this-in-production
     ports:
       - "8080:8080"

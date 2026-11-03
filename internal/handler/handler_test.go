@@ -78,6 +78,10 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"version":1`)) {
 		t.Fatalf("post revision missing: %d %s", response.Code, response.Body.String())
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/posts/"+strconv.FormatUint(uint64(createdPost.ID), 10)+"/analytics", nil, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"views":1`)) {
+		t.Fatalf("post analytics missing: %d %s", response.Code, response.Body.String())
+	}
 	response = request(t, router, http.MethodPost, "/api/v1/admin/categories", map[string]string{"name": "Go"}, login.Token)
 	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"go"`)) {
 		t.Fatalf("category creation failed: %d %s", response.Code, response.Body.String())

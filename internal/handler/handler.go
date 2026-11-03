@@ -49,8 +49,33 @@ type CommentProvider interface {
 	Moderate(context.Context, uint, bool) error
 }
 
+type AnalyticsProvider interface {
+	RecordView(context.Context, uint) error
+	Stats(context.Context, uint) (int64, error)
+}
+
 type localCommentProvider struct {
 	repo *repository.Repository
+}
+
+type localAnalyticsProvider struct {
+	repo *repository.Repository
+}
+
+func (p localAnalyticsProvider) RecordView(ctx context.Context, postID uint) error {
+	if postID == 0 {
+		return nil
+	}
+	return p.repo.CreateViewEvent(ctx, &model.ViewEvent{
+		PostID:    postID,
+		RequestID: logging.RequestID(ctx),
+		TraceID:   logging.TraceID(ctx),
+		ViewedAt:  time.Now().UTC(),
+	})
+}
+
+func (p localAnalyticsProvider) Stats(ctx context.Context, postID uint) (int64, error) {
+	return p.repo.CountPostViews(ctx, postID)
 }
 
 func (p localCommentProvider) List(ctx context.Context, postID uint, includePending bool) ([]model.Comment, error) {
@@ -98,14 +123,15 @@ func (p localIdentityProvider) Validate(_ context.Context, token string) (uint, 
 }
 
 type Handler struct {
-	cfg      config.Config
-	repo     *repository.Repository
-	service  *service.BlogService
-	reader   ContentReader
-	identity IdentityProvider
-	comments CommentProvider
-	logger   *slog.Logger
-	metrics  *metrics.Registry
+	cfg       config.Config
+	repo      *repository.Repository
+	service   *service.BlogService
+	reader    ContentReader
+	identity  IdentityProvider
+	comments  CommentProvider
+	analytics AnalyticsProvider
+	logger    *slog.Logger
+	metrics   *metrics.Registry
 }
 
 func New(cfg config.Config, repo *repository.Repository) *Handler {
@@ -129,6 +155,10 @@ func NewWithProviders(cfg config.Config, repo *repository.Repository, reader Con
 }
 
 func NewWithComments(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithCommentsAndAnalytics(cfg, repo, reader, identity, comments, nil, logger, registry)
+}
+
+func NewWithCommentsAndAnalytics(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -142,7 +172,10 @@ func NewWithComments(cfg config.Config, repo *repository.Repository, reader Cont
 	if comments == nil {
 		comments = localCommentProvider{repo: repo}
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, logger: logger, metrics: registry}
+	if analytics == nil {
+		analytics = localAnalyticsProvider{repo: repo}
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -169,6 +202,7 @@ func (h *Handler) Router() *gin.Engine {
 	admin.PUT("/posts/:id", h.updatePost)
 	admin.DELETE("/posts/:id", h.deletePost)
 	admin.GET("/posts/:id/revisions", h.listPostRevisions)
+	admin.GET("/posts/:id/analytics", h.postAnalytics)
 	admin.POST("/categories", h.createCategory)
 	admin.POST("/tags", h.createTag)
 	admin.GET("/comments", h.listPendingComments)
@@ -183,8 +217,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments} {
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -331,7 +365,22 @@ func (h *Handler) getPublicPost(c *gin.Context) {
 		c.Status(http.StatusNotModified)
 		return
 	}
+	h.recordView(c, post.ID)
 	c.JSON(http.StatusOK, post)
+}
+
+func (h *Handler) postAnalytics(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+	views, err := h.analytics.Stats(c.Request.Context(), uint(id))
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"postId": id, "views": views})
 }
 
 func (h *Handler) createPost(c *gin.Context) {
@@ -599,6 +648,15 @@ func (h *Handler) recordRevision(c *gin.Context, editorID uint, post model.Post)
 	revision := &model.PostRevision{PostID: post.ID, Title: post.Title, Excerpt: post.Excerpt, Content: post.Content, Status: post.Status, EditorID: editorID}
 	if err := h.repo.CreatePostRevision(c.Request.Context(), revision); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write post revision", "error", err, "post_id", post.ID)
+	}
+}
+
+func (h *Handler) recordView(c *gin.Context, postID uint) {
+	if postID == 0 {
+		return
+	}
+	if err := h.analytics.RecordView(c.Request.Context(), postID); err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "record post view", "error", err, "post_id", postID)
 	}
 }
 

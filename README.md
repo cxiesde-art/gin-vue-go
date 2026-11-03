@@ -2,7 +2,7 @@
 
 `gin-vue-blog-go` is a distributed Go backend for a Vue blog frontend. It is inspired by the backend responsibilities in [szluyu99/gin-vue-blog](https://github.com/szluyu99/gin-vue-blog), while keeping the implementation independent and focused on a clean API contract.
 
-The service provides public post browsing, Markdown-friendly post content, moderation-ready comments, admin CRUD, JWT authentication, role checks, pagination, SQLite persistence, and a health endpoint. Public content reads can run in a separate gRPC content service, while the Gin API handles authentication and writes. Structured JSON logs carry request and trace IDs across HTTP and gRPC. GORM migrations run automatically on startup, so a new checkout can be started without a separate database setup step.
+The service provides public post browsing, Markdown-friendly post content, moderation-ready comments, admin CRUD, JWT authentication, role checks, pagination, SQLite persistence, view analytics, and health endpoints. Public content reads can run in a separate gRPC content service, while the Gin API handles authentication, analytics, and writes. Structured JSON logs carry request and trace IDs across HTTP and gRPC. GORM migrations run automatically on startup, so a new checkout can be started without a separate database setup step.
 
 ## Run locally
 
@@ -32,13 +32,13 @@ Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment.
 
 ## Distributed mode
 
-Run the two-service stack with Docker Compose:
+Run the distributed stack with Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-The `identity` service listens on gRPC `:9091` and owns credential verification and token issuance. The `content` service listens on gRPC `:9090` and owns public content reads. The `comments` service listens on gRPC `:9092` and owns comment creation and moderation. The `worker` process publishes pending outbox events. The Gin API listens on HTTP `:8080`; set the `BLOG_*_GRPC_ADDRESS` variables to enable the remote services. When an address is empty, the API uses its local implementation, which keeps single-process development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
+The `identity` service listens on gRPC `:9091` and owns credential verification and token issuance. The `content` service listens on gRPC `:9090` and owns public content reads. The `comments` service listens on gRPC `:9092` and owns comment creation and moderation. The `analytics` service listens on gRPC `:9093` and records public post views. The `worker` process publishes pending outbox events. The Gin API listens on HTTP `:8080`; set the `BLOG_*_GRPC_ADDRESS` variables to enable the remote services. When an address is empty, the API uses its local implementation, which keeps single-process development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
 
 The content service enables gRPC reflection for local inspection with tools such as `grpcurl`; keep the service behind the private network in production.
 
@@ -49,6 +49,8 @@ The content client also uses a circuit breaker after repeated failures. It allow
 Admin mutations also create durable audit and outbox records. `GET /api/v1/admin/audit-events` exposes the audit trail, while `GET /api/v1/admin/outbox-events` exposes unpublished events for a publisher worker.
 
 Admin post writes retain immutable revisions. Use `GET /api/v1/admin/posts/:id/revisions` to inspect the newest version first.
+
+Admin clients can inspect recorded view events with `GET /api/v1/admin/posts/:id/analytics`. Public detail responses continue to expose the aggregate `viewCount`; analytics events retain request and trace IDs for distributed observability.
 
 ## API examples
 

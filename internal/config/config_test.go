@@ -7,10 +7,11 @@ import (
 
 func TestFromEnvParsesDistributedSettings(t *testing.T) {
 	t.Setenv("BLOG_CONTENT_GRPC_ADDRESS", "content:9090")
+	t.Setenv("BLOG_ANALYTICS_GRPC_ADDRESS", "analytics:9093")
 	t.Setenv("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", "5")
 	t.Setenv("BLOG_CONTENT_GRPC_RETRY_DELAY", "125ms")
 	cfg := FromEnv()
-	if cfg.ContentGRPCAddress != "content:9090" || cfg.ContentGRPCRetryAttempts != 5 || cfg.ContentGRPCRetryDelay != 125*time.Millisecond {
+	if cfg.ContentGRPCAddress != "content:9090" || cfg.AnalyticsGRPCAddress != "analytics:9093" || cfg.ContentGRPCRetryAttempts != 5 || cfg.ContentGRPCRetryDelay != 125*time.Millisecond {
 		t.Fatalf("unexpected distributed config: %#v", cfg)
 	}
 }
