@@ -1,0 +1,58 @@
+# Gin Vue Blog Go
+
+`gin-vue-blog-go` is a small, production-minded Go backend for a Vue blog frontend. It is inspired by the backend responsibilities in [szluyu99/gin-vue-blog](https://github.com/szluyu99/gin-vue-blog), while keeping the implementation independent and focused on a clean API contract.
+
+The service provides public post browsing, Markdown-friendly post content, moderation-ready comments, admin CRUD, JWT authentication, role checks, pagination, SQLite persistence, and a health endpoint. GORM migrations run automatically on startup, so a new checkout can be started without a separate database setup step.
+
+## Run locally
+
+Requirements: Go 1.23 or newer.
+
+```bash
+go mod download
+go run ./cmd/server
+```
+
+The server listens on `http://localhost:8080`. The first start creates `blog.db` and seeds an administrator using:
+
+```text
+BLOG_ADMIN_EMAIL=admin@example.com
+BLOG_ADMIN_PASSWORD=admin123
+```
+
+Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment. Never use the development JWT secret or administrator password in production.
+
+## API examples
+
+Log in to receive a bearer token:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"admin123"}'
+```
+
+Create a published post with the returned token:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/admin/posts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Hello Vue","content":"# Welcome","status":"published"}'
+```
+
+Public clients use `GET /api/v1/posts`, `GET /api/v1/posts/:slug`, `GET /api/v1/posts/:slug/comments`, and `POST /api/v1/posts/:slug/comments`. Admin clients use the `/api/v1/admin` routes to manage drafts and approve comments.
+
+## Development
+
+```bash
+make fmt
+make vet
+make test
+```
+
+The CI workflow also runs the test suite with the race detector and writes a coverage profile. The project is intentionally backend-only; a Vue 3 client can consume the versioned JSON API without coupling to the persistence layer.
+
+## License
+
+MIT
