@@ -173,16 +173,20 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	checker, remote := h.reader.(ContentHealthChecker)
-	if !remote {
-		c.JSON(http.StatusOK, gin.H{"status": "ready", "content": "local"})
-		return
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments} {
+		checker, remote := dependency.(ContentHealthChecker)
+		if !remote {
+			continue
+		}
+		if err := checker.Health(c.Request.Context()); err != nil {
+			internalErrorStatus(c, http.StatusServiceUnavailable, err)
+			return
+		}
+		dependencies[name] = "remote"
 	}
-	if err := checker.Health(c.Request.Context()); err != nil {
-		internalErrorStatus(c, http.StatusServiceUnavailable, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "ready", "content": "remote"})
+	dependencies["status"] = "ready"
+	c.JSON(http.StatusOK, dependencies)
 }
 
 func (h *Handler) login(c *gin.Context) {

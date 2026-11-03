@@ -120,6 +120,8 @@ func (fakeIdentityProvider) Login(context.Context, string, string) (model.User, 
 	return model.User{ID: 9, Email: "remote@example.com", Role: "admin"}, "remote-token", nil
 }
 
+func (fakeIdentityProvider) Health(context.Context) error { return nil }
+
 type fakeCommentProvider struct {
 	created bool
 }
@@ -134,6 +136,8 @@ func (p *fakeCommentProvider) Create(context.Context, uint, string, string, stri
 }
 
 func (p *fakeCommentProvider) Moderate(context.Context, uint, bool) error { return nil }
+
+func (p *fakeCommentProvider) Health(context.Context) error { return nil }
 
 func (fakeContentReader) ListPosts(context.Context, int, int) ([]model.Post, int64, error) {
 	return []model.Post{{Title: "Remote post"}}, 1, nil
