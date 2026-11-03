@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/auth"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/middleware"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
@@ -20,15 +22,20 @@ type Handler struct {
 	cfg     config.Config
 	repo    *repository.Repository
 	service *service.BlogService
+	logger  *slog.Logger
 }
 
 func New(cfg config.Config, repo *repository.Repository) *Handler {
-	return &Handler{cfg: cfg, repo: repo, service: service.NewBlogService(repo)}
+	return NewWithLogger(cfg, repo, logging.New("blog-api"))
+}
+
+func NewWithLogger(cfg config.Config, repo *repository.Repository, logger *slog.Logger) *Handler {
+	return &Handler{cfg: cfg, repo: repo, service: service.NewBlogService(repo), logger: logger}
 }
 
 func (h *Handler) Router() *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(gin.Recovery(), logging.HTTPMiddleware(h.logger))
 	router.GET("/healthz", h.health)
 
 	api := router.Group("/api/v1")
