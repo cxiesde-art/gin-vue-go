@@ -24,6 +24,8 @@ Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment.
 
 `BLOG_MAX_BODY_BYTES` limits JSON request bodies and defaults to 1 MiB. The API also emits browser security headers on every response.
 
+`BLOG_RATE_LIMIT_REQUESTS` and `BLOG_RATE_LIMIT_WINDOW` configure the gateway's per-client request window. In a multi-instance deployment, place a shared rate limiter at the edge as well; this in-process limiter protects each instance independently.
+
 ## Distributed mode
 
 Run the two-service stack with Docker Compose:

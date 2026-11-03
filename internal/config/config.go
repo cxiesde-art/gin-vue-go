@@ -16,6 +16,8 @@ type Config struct {
 	ContentGRPCRetryAttempts int
 	ContentGRPCRetryDelay    time.Duration
 	MaxBodyBytes             int64
+	RateLimitRequests        int
+	RateLimitWindow          time.Duration
 }
 
 func FromEnv() Config {
@@ -29,6 +31,8 @@ func FromEnv() Config {
 		ContentGRPCRetryAttempts: envInt("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", 3),
 		ContentGRPCRetryDelay:    envDuration("BLOG_CONTENT_GRPC_RETRY_DELAY", 50*time.Millisecond),
 		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),
+		RateLimitRequests:        envInt("BLOG_RATE_LIMIT_REQUESTS", 120),
+		RateLimitWindow:          envDuration("BLOG_RATE_LIMIT_WINDOW", time.Minute),
 	}
 }
 
