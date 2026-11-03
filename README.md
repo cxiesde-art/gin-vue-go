@@ -32,6 +32,8 @@ docker compose up --build
 
 The `content` service listens on gRPC `:9090` and owns public content reads. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
 
+The API retries transient gRPC `Unavailable`, `DeadlineExceeded`, and `ResourceExhausted` responses with bounded exponential backoff. Requests stop immediately on permanent errors or when the caller context is canceled.
+
 ## API examples
 
 Log in to receive a bearer token:

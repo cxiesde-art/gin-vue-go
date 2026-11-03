@@ -15,6 +15,7 @@ import (
 
 type Client struct {
 	connection *grpc.ClientConn
+	policy     RetryPolicy
 }
 
 func Dial(ctx context.Context, address string, logger *slog.Logger) (*Client, error) {
@@ -26,7 +27,7 @@ func Dial(ctx context.Context, address string, logger *slog.Logger) (*Client, er
 	if err != nil {
 		return nil, err
 	}
-	return &Client{connection: connection}, nil
+	return &Client{connection: connection, policy: DefaultRetryPolicy}, nil
 }
 
 func (c *Client) Close() error { return c.connection.Close() }
@@ -104,5 +105,7 @@ func (c *Client) invoke(ctx context.Context, method string, request, response an
 	if logging.RequestID(ctx) == "" {
 		ctx = logging.WithIDs(ctx, logging.NewID(), logging.NewID())
 	}
-	return c.connection.Invoke(ctx, "/"+serviceName+"/"+method, request, response)
+	return retryRPC(ctx, c.policy, func() error {
+		return c.connection.Invoke(ctx, "/"+serviceName+"/"+method, request, response)
+	})
 }
