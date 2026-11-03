@@ -11,10 +11,11 @@ func TestFromEnvParsesDistributedSettings(t *testing.T) {
 	t.Setenv("BLOG_TAXONOMY_GRPC_ADDRESS", "taxonomy:9094")
 	t.Setenv("BLOG_SEARCH_GRPC_ADDRESS", "search:9095")
 	t.Setenv("BLOG_AUDIT_GRPC_ADDRESS", "audit:9096")
+	t.Setenv("BLOG_POST_GRPC_ADDRESS", "posts:9097")
 	t.Setenv("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", "5")
 	t.Setenv("BLOG_CONTENT_GRPC_RETRY_DELAY", "125ms")
 	cfg := FromEnv()
-	if cfg.ContentGRPCAddress != "content:9090" || cfg.AnalyticsGRPCAddress != "analytics:9093" || cfg.TaxonomyGRPCAddress != "taxonomy:9094" || cfg.SearchGRPCAddress != "search:9095" || cfg.AuditGRPCAddress != "audit:9096" || cfg.ContentGRPCRetryAttempts != 5 || cfg.ContentGRPCRetryDelay != 125*time.Millisecond {
+	if cfg.ContentGRPCAddress != "content:9090" || cfg.AnalyticsGRPCAddress != "analytics:9093" || cfg.TaxonomyGRPCAddress != "taxonomy:9094" || cfg.SearchGRPCAddress != "search:9095" || cfg.AuditGRPCAddress != "audit:9096" || cfg.PostGRPCAddress != "posts:9097" || cfg.ContentGRPCRetryAttempts != 5 || cfg.ContentGRPCRetryDelay != 125*time.Millisecond {
 		t.Fatalf("unexpected distributed config: %#v", cfg)
 	}
 }

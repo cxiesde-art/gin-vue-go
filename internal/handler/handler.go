@@ -69,6 +69,14 @@ type AuditProvider interface {
 	ListPendingOutbox(context.Context, int) ([]model.OutboxEvent, error)
 }
 
+type AdminPostProvider interface {
+	List(context.Context, int, int) ([]model.Post, int64, error)
+	Get(context.Context, string) (model.Post, error)
+	Save(context.Context, *model.Post) error
+	Delete(context.Context, uint) error
+	ListRevisions(context.Context, uint) ([]model.PostRevision, error)
+}
+
 type localCommentProvider struct {
 	repo *repository.Repository
 }
@@ -79,6 +87,31 @@ type localAnalyticsProvider struct {
 
 type localAuditProvider struct {
 	repo *repository.Repository
+}
+
+type localAdminPostProvider struct {
+	service *service.BlogService
+	repo    *repository.Repository
+}
+
+func (p localAdminPostProvider) List(ctx context.Context, page, pageSize int) ([]model.Post, int64, error) {
+	return p.service.ListAllPosts(ctx, page, pageSize)
+}
+
+func (p localAdminPostProvider) Get(ctx context.Context, identifier string) (model.Post, error) {
+	return p.service.GetPost(ctx, identifier, false)
+}
+
+func (p localAdminPostProvider) Save(ctx context.Context, post *model.Post) error {
+	return p.service.SavePost(ctx, post)
+}
+
+func (p localAdminPostProvider) Delete(ctx context.Context, postID uint) error {
+	return p.service.DeletePost(ctx, postID)
+}
+
+func (p localAdminPostProvider) ListRevisions(ctx context.Context, postID uint) ([]model.PostRevision, error) {
+	return p.repo.ListPostRevisions(ctx, postID)
 }
 
 func (p localAuditProvider) Record(ctx context.Context, audit *model.AuditEvent, outbox *model.OutboxEvent) error {
@@ -164,6 +197,7 @@ type Handler struct {
 	taxonomy  TaxonomyProvider
 	search    SearchProvider
 	audit     AuditProvider
+	posts     AdminPostProvider
 	logger    *slog.Logger
 	metrics   *metrics.Registry
 }
@@ -205,6 +239,10 @@ func NewWithServices(cfg config.Config, repo *repository.Repository, reader Cont
 }
 
 func NewWithServicesAndAudit(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, audit AuditProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithAllDependencies(cfg, repo, reader, identity, comments, analytics, taxonomy, search, audit, nil, logger, registry)
+}
+
+func NewWithAllDependencies(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, audit AuditProvider, posts AdminPostProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -230,7 +268,10 @@ func NewWithServicesAndAudit(cfg config.Config, repo *repository.Repository, rea
 	if audit == nil {
 		audit = localAuditProvider{repo: repo}
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, audit: audit, logger: logger, metrics: registry}
+	if posts == nil {
+		posts = localAdminPostProvider{service: blogService, repo: repo}
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, audit: audit, posts: posts, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -272,8 +313,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local", "audit": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search, "audit": h.audit} {
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local", "audit": "local", "posts": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search, "audit": h.audit, "posts": h.posts} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -335,7 +376,7 @@ func (h *Handler) searchPosts(c *gin.Context) {
 
 func (h *Handler) listAdminPosts(c *gin.Context) {
 	page, size := pagination(c)
-	posts, total, err := h.service.ListAllPosts(c.Request.Context(), page, size)
+	posts, total, err := h.posts.List(c.Request.Context(), page, size)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -446,7 +487,7 @@ func (h *Handler) createPost(c *gin.Context) {
 	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
 	post := input.model()
 	post.AuthorID = claims.UserID
-	if err := h.service.SavePost(c.Request.Context(), &post); err != nil {
+	if err := h.posts.Save(c.Request.Context(), &post); err != nil {
 		if errors.Is(err, service.ErrInvalidPost) || errors.Is(err, service.ErrInvalidStatus) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -465,7 +506,7 @@ func (h *Handler) updatePost(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
 		return
 	}
-	post, err := h.service.GetPost(c.Request.Context(), strconv.FormatUint(id, 10), false)
+	post, err := h.posts.Get(c.Request.Context(), strconv.FormatUint(id, 10))
 	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
@@ -479,7 +520,7 @@ func (h *Handler) updatePost(c *gin.Context) {
 		return
 	}
 	input.apply(&post)
-	if err := h.service.SavePost(c.Request.Context(), &post); err != nil {
+	if err := h.posts.Save(c.Request.Context(), &post); err != nil {
 		if errors.Is(err, service.ErrInvalidPost) || errors.Is(err, service.ErrInvalidStatus) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -499,7 +540,7 @@ func (h *Handler) deletePost(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
 		return
 	}
-	if err := h.service.DeletePost(c.Request.Context(), uint(id)); errors.Is(err, repository.ErrNotFound) {
+	if err := h.posts.Delete(c.Request.Context(), uint(id)); errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	} else if err != nil {
@@ -517,7 +558,7 @@ func (h *Handler) listPostRevisions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
 		return
 	}
-	revisions, err := h.repo.ListPostRevisions(c.Request.Context(), uint(id))
+	revisions, err := h.posts.ListRevisions(c.Request.Context(), uint(id))
 	if err != nil {
 		internalError(c, err)
 		return

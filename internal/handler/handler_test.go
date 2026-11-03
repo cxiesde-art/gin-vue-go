@@ -158,6 +158,34 @@ type fakeAuditProvider struct {
 	recorded bool
 }
 
+type fakeAdminPostProvider struct {
+	saved bool
+}
+
+func (p *fakeAdminPostProvider) List(context.Context, int, int) ([]model.Post, int64, error) {
+	return []model.Post{{ID: 44, Title: "Remote admin post", Slug: "remote-admin-post", Content: "body", Status: "draft"}}, 1, nil
+}
+
+func (p *fakeAdminPostProvider) Get(context.Context, string) (model.Post, error) {
+	return model.Post{ID: 44, Title: "Remote admin post", Slug: "remote-admin-post", Content: "body", Status: "draft"}, nil
+}
+
+func (p *fakeAdminPostProvider) Save(_ context.Context, post *model.Post) error {
+	p.saved = true
+	if post.ID == 0 {
+		post.ID = 44
+	}
+	return nil
+}
+
+func (p *fakeAdminPostProvider) Delete(context.Context, uint) error { return nil }
+
+func (p *fakeAdminPostProvider) ListRevisions(context.Context, uint) ([]model.PostRevision, error) {
+	return []model.PostRevision{{PostID: 44, Version: 1}}, nil
+}
+
+func (p *fakeAdminPostProvider) Health(context.Context) error { return nil }
+
 func (p *fakeAuditProvider) Record(context.Context, *model.AuditEvent, *model.OutboxEvent) error {
 	p.recorded = true
 	return nil
@@ -347,6 +375,33 @@ func TestRemoteAuditProviderFeedsAdminRoute(t *testing.T) {
 	response = request(t, router, http.MethodGet, "/readyz", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"audit":"remote"`)) {
 		t.Fatalf("gateway readiness did not check remote audit: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteAdminPostProviderFeedsAdminRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts := &fakeAdminPostProvider{}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithAllDependencies(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, nil, nil, nil, nil, nil, posts, logging.NewText("posts-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/admin/posts", nil, "remote-token")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"title":"Remote admin post"`)) {
+		t.Fatalf("gateway did not use remote admin post list: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Created remotely", "content": "body"}, "remote-token")
+	if response.Code != http.StatusCreated || !posts.saved {
+		t.Fatalf("gateway did not use remote admin post save: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/posts/44/revisions", nil, "remote-token")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"version":1`)) {
+		t.Fatalf("gateway did not use remote revisions: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"posts":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote posts: %d %s", response.Code, response.Body.String())
 	}
 }
 
