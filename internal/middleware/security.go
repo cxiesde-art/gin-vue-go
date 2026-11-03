@@ -16,6 +16,13 @@ func SecurityHeaders() gin.HandlerFunc {
 	}
 }
 
+func APIVersion(version string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-API-Version", version)
+		c.Next()
+	}
+}
+
 func BodyLimit(maxBytes int64) gin.HandlerFunc {
 	if maxBytes < 1 {
 		maxBytes = 1 << 20

@@ -22,6 +22,29 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestAPIVersionHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	api := router.Group("/api/v1")
+	api.Use(APIVersion("v1"))
+	api.GET("/health", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	apiRequest := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	apiResponse := httptest.NewRecorder()
+	router.ServeHTTP(apiResponse, apiRequest)
+	if apiResponse.Header().Get("X-API-Version") != "v1" {
+		t.Fatalf("API version header missing: %#v", apiResponse.Header())
+	}
+
+	healthRequest := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthResponse := httptest.NewRecorder()
+	router.ServeHTTP(healthResponse, healthRequest)
+	if healthResponse.Header().Get("X-API-Version") != "" {
+		t.Fatalf("API version header leaked to health endpoint: %#v", healthResponse.Header())
+	}
+}
+
 func TestBodyLimitRejectsKnownLargeRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

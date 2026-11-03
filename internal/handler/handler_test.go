@@ -122,6 +122,10 @@ func (fakeIdentityProvider) Login(context.Context, string, string) (model.User, 
 
 func (fakeIdentityProvider) Health(context.Context) error { return nil }
 
+func (fakeIdentityProvider) Validate(context.Context, string) (uint, string, error) {
+	return 9, "admin", nil
+}
+
 type fakeCommentProvider struct {
 	created bool
 }

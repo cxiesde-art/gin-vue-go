@@ -40,6 +40,7 @@ type ContentHealthChecker interface {
 
 type IdentityProvider interface {
 	Login(context.Context, string, string) (model.User, string, error)
+	Validate(context.Context, string) (uint, string, error)
 }
 
 type CommentProvider interface {
@@ -86,6 +87,14 @@ func (p localIdentityProvider) Login(ctx context.Context, email, password string
 		return model.User{}, "", err
 	}
 	return user, token, nil
+}
+
+func (p localIdentityProvider) Validate(_ context.Context, token string) (uint, string, error) {
+	claims, err := auth.ParseToken(p.jwtSecret, token)
+	if err != nil {
+		return 0, "", err
+	}
+	return claims.UserID, claims.Role, nil
 }
 
 type Handler struct {
@@ -144,6 +153,7 @@ func (h *Handler) Router() *gin.Engine {
 	router.GET("/metrics", h.metrics.Handler)
 
 	api := router.Group("/api/v1")
+	api.Use(middleware.APIVersion("v1"))
 	api.POST("/auth/login", h.login)
 	api.GET("/posts", h.listPublicPosts)
 	api.GET("/search", h.searchPosts)
@@ -153,7 +163,7 @@ func (h *Handler) Router() *gin.Engine {
 	api.POST("/posts/:identifier/comments", h.createComment)
 	api.GET("/posts/:identifier/comments", h.listComments)
 
-	admin := api.Group("/admin", middleware.RequireAuth(h.cfg.JWTSecret), middleware.RequireRole("admin"))
+	admin := api.Group("/admin", middleware.RequireTokenValidator(h.identity), middleware.RequireRole("admin"))
 	admin.GET("/posts", h.listAdminPosts)
 	admin.POST("/posts", h.createPost)
 	admin.PUT("/posts/:id", h.updatePost)
