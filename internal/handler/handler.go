@@ -38,13 +38,35 @@ type ContentHealthChecker interface {
 	Health(context.Context) error
 }
 
+type IdentityProvider interface {
+	Login(context.Context, string, string) (model.User, string, error)
+}
+
+type localIdentityProvider struct {
+	repo      *repository.Repository
+	jwtSecret string
+}
+
+func (p localIdentityProvider) Login(ctx context.Context, email, password string) (model.User, string, error) {
+	user, err := p.repo.FindUserByEmail(ctx, email)
+	if err != nil || !auth.CheckPassword(user.PasswordHash, password) {
+		return model.User{}, "", status.Error(codes.Unauthenticated, "invalid credentials")
+	}
+	token, err := auth.IssueToken(p.jwtSecret, user.ID, user.Role, time.Now().UTC())
+	if err != nil {
+		return model.User{}, "", err
+	}
+	return user, token, nil
+}
+
 type Handler struct {
-	cfg     config.Config
-	repo    *repository.Repository
-	service *service.BlogService
-	reader  ContentReader
-	logger  *slog.Logger
-	metrics *metrics.Registry
+	cfg      config.Config
+	repo     *repository.Repository
+	service  *service.BlogService
+	reader   ContentReader
+	identity IdentityProvider
+	logger   *slog.Logger
+	metrics  *metrics.Registry
 }
 
 func New(cfg config.Config, repo *repository.Repository) *Handler {
@@ -60,6 +82,10 @@ func NewWithReader(cfg config.Config, repo *repository.Repository, reader Conten
 }
 
 func NewWithReaderAndMetrics(cfg config.Config, repo *repository.Repository, reader ContentReader, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithProviders(cfg, repo, reader, localIdentityProvider{repo: repo, jwtSecret: cfg.JWTSecret}, logger, registry)
+}
+
+func NewWithProviders(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -67,7 +93,10 @@ func NewWithReaderAndMetrics(cfg config.Config, repo *repository.Repository, rea
 	if registry == nil {
 		registry = metrics.New()
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, logger: logger, metrics: registry}
+	if identity == nil {
+		identity = localIdentityProvider{repo: repo, jwtSecret: cfg.JWTSecret}
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -127,12 +156,11 @@ func (h *Handler) login(c *gin.Context) {
 	if !bindJSON(c, &input) {
 		return
 	}
-	user, err := h.repo.FindUserByEmail(c.Request.Context(), input.Email)
-	if err != nil || !auth.CheckPassword(user.PasswordHash, input.Password) {
+	user, token, err := h.identity.Login(c.Request.Context(), input.Email, input.Password)
+	if status.Code(err) == codes.Unauthenticated {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
-	token, err := auth.IssueToken(h.cfg.JWTSecret, user.ID, user.Role, time.Now().UTC())
 	if err != nil {
 		internalError(c, err)
 		return

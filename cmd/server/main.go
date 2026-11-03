@@ -12,7 +12,9 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/handler"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/authrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
 )
 
@@ -50,8 +52,22 @@ func main() {
 		reader = contentClient
 		logger.Info("using distributed content service", "address", cfg.ContentGRPCAddress)
 	}
+	var identity handler.IdentityProvider
+	var identityClient *authrpc.Client
+	if cfg.IdentityGRPCAddress != "" {
+		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		identityClient, err = authrpc.Dial(dialContext, cfg.IdentityGRPCAddress, logger)
+		cancel()
+		if err != nil {
+			logger.Error("connect to identity RPC", "address", cfg.IdentityGRPCAddress, "error", err)
+			os.Exit(1)
+		}
+		defer identityClient.Close()
+		identity = identityClient
+		logger.Info("using distributed identity service", "address", cfg.IdentityGRPCAddress)
+	}
 
-	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithReader(cfg, repo, reader, logger).Router()}
+	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithProviders(cfg, repo, reader, identity, logger, metrics.New()).Router()}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("blog API listening", "address", cfg.Address, "database", cfg.DatabaseURL)

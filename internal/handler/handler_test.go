@@ -114,6 +114,12 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 
 type fakeContentReader struct{}
 
+type fakeIdentityProvider struct{}
+
+func (fakeIdentityProvider) Login(context.Context, string, string) (model.User, string, error) {
+	return model.User{ID: 9, Email: "remote@example.com", Role: "admin"}, "remote-token", nil
+}
+
 func (fakeContentReader) ListPosts(context.Context, int, int) ([]model.Post, int64, error) {
 	return []model.Post{{Title: "Remote post"}}, 1, nil
 }
@@ -155,6 +161,20 @@ func TestRemoteContentReaderFeedsPublicRoutes(t *testing.T) {
 	response = request(t, router, http.MethodGet, "/readyz", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"content":"remote"`)) {
 		t.Fatalf("gateway readiness did not check remote reader: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteIdentityProviderFeedsLoginRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithProviders(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, logging.NewText("identity-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]string{"email": "remote@example.com", "password": "secret"}, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"token":"remote-token"`)) {
+		t.Fatalf("gateway did not use remote identity: %d %s", response.Code, response.Body.String())
 	}
 }
 
