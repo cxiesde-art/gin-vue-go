@@ -144,6 +144,14 @@ func (fakeTaxonomyProvider) ListTags(context.Context) ([]model.Tag, error) {
 	return []model.Tag{{Name: "Remote tag", Slug: "remote-tag"}}, nil
 }
 
+func (fakeTaxonomyProvider) CreateCategory(context.Context, string, string) (model.Category, error) {
+	return model.Category{ID: 21, Name: "Remote category", Slug: "remote-category"}, nil
+}
+
+func (fakeTaxonomyProvider) CreateTag(context.Context, string, string) (model.Tag, error) {
+	return model.Tag{ID: 22, Name: "Remote tag", Slug: "remote-tag"}, nil
+}
+
 func (fakeTaxonomyProvider) Health(context.Context) error { return nil }
 
 type fakeSearchProvider struct{}
@@ -326,6 +334,14 @@ func TestRemoteTaxonomyProviderFeedsPublicRoutes(t *testing.T) {
 	response = request(t, router, http.MethodGet, "/api/v1/tags", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"remote-tag"`)) {
 		t.Fatalf("gateway did not use remote taxonomy tags: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/categories", map[string]string{"name": "Remote category"}, "remote-token")
+	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"id":21`)) {
+		t.Fatalf("gateway did not use remote taxonomy category write: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/tags", map[string]string{"name": "Remote tag"}, "remote-token")
+	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"id":22`)) {
+		t.Fatalf("gateway did not use remote taxonomy tag write: %d %s", response.Code, response.Body.String())
 	}
 	response = request(t, router, http.MethodGet, "/readyz", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"taxonomy":"remote"`)) {

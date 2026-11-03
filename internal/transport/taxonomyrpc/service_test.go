@@ -53,6 +53,14 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err != nil || len(tags) != 1 || tags[0].Slug != "gin" {
 		t.Fatalf("unexpected tags: %#v error=%v", tags, err)
 	}
+	category, err := client.CreateCategory(ctx, "Rust", "")
+	if err != nil || category.Slug != "rust" {
+		t.Fatalf("unexpected created category: %#v error=%v", category, err)
+	}
+	tag, err := client.CreateTag(ctx, "Axum", "")
+	if err != nil || tag.Slug != "axum" {
+		t.Fatalf("unexpected created tag: %#v error=%v", tag, err)
+	}
 	if err := client.Health(ctx); err != nil {
 		t.Fatalf("health RPC failed: %v", err)
 	}

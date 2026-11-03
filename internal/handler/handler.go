@@ -57,6 +57,8 @@ type AnalyticsProvider interface {
 type TaxonomyProvider interface {
 	ListCategories(context.Context) ([]model.Category, error)
 	ListTags(context.Context) ([]model.Tag, error)
+	CreateCategory(context.Context, string, string) (model.Category, error)
+	CreateTag(context.Context, string, string) (model.Tag, error)
 }
 
 type SearchProvider interface {
@@ -412,9 +414,9 @@ func (h *Handler) createCategory(c *gin.Context) {
 	if !bindJSON(c, &input) {
 		return
 	}
-	category, err := h.service.CreateCategory(c.Request.Context(), input.Name, input.Slug)
+	category, err := h.taxonomy.CreateCategory(c.Request.Context(), input.Name, input.Slug)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidTaxonomy) {
+		if errors.Is(err, service.ErrInvalidTaxonomy) || status.Code(err) == codes.InvalidArgument {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -431,9 +433,9 @@ func (h *Handler) createTag(c *gin.Context) {
 	if !bindJSON(c, &input) {
 		return
 	}
-	tag, err := h.service.CreateTag(c.Request.Context(), input.Name, input.Slug)
+	tag, err := h.taxonomy.CreateTag(c.Request.Context(), input.Name, input.Slug)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidTaxonomy) {
+		if errors.Is(err, service.ErrInvalidTaxonomy) || status.Code(err) == codes.InvalidArgument {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

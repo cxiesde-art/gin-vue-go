@@ -33,7 +33,7 @@ func (c *Client) Close() error { return c.connection.Close() }
 
 func (c *Client) ListCategories(ctx context.Context) ([]model.Category, error) {
 	response := new(ListCategoriesResponse)
-	if err := c.invoke(ctx, "ListCategories", response); err != nil {
+	if err := c.invoke(ctx, "ListCategories", &struct{}{}, response); err != nil {
 		return nil, err
 	}
 	return response.Items, nil
@@ -41,15 +41,31 @@ func (c *Client) ListCategories(ctx context.Context) ([]model.Category, error) {
 
 func (c *Client) ListTags(ctx context.Context) ([]model.Tag, error) {
 	response := new(ListTagsResponse)
-	if err := c.invoke(ctx, "ListTags", response); err != nil {
+	if err := c.invoke(ctx, "ListTags", &struct{}{}, response); err != nil {
 		return nil, err
 	}
 	return response.Items, nil
 }
 
+func (c *Client) CreateCategory(ctx context.Context, name, slug string) (model.Category, error) {
+	response := new(CategoryResponse)
+	if err := c.invoke(ctx, "CreateCategory", &CreateRequest{Name: name, Slug: slug}, response); err != nil {
+		return model.Category{}, err
+	}
+	return response.Category, nil
+}
+
+func (c *Client) CreateTag(ctx context.Context, name, slug string) (model.Tag, error) {
+	response := new(TagResponse)
+	if err := c.invoke(ctx, "CreateTag", &CreateRequest{Name: name, Slug: slug}, response); err != nil {
+		return model.Tag{}, err
+	}
+	return response.Tag, nil
+}
+
 func (c *Client) Health(ctx context.Context) error {
 	response := new(HealthResponse)
-	if err := c.invoke(ctx, "Health", response); err != nil {
+	if err := c.invoke(ctx, "Health", &struct{}{}, response); err != nil {
 		return err
 	}
 	if response.Status != "ok" {
@@ -58,9 +74,9 @@ func (c *Client) Health(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) invoke(ctx context.Context, method string, response any) error {
+func (c *Client) invoke(ctx context.Context, method string, request, response any) error {
 	if logging.RequestID(ctx) == "" {
 		ctx = logging.WithIDs(ctx, logging.NewID(), logging.NewID())
 	}
-	return c.connection.Invoke(ctx, "/"+serviceName+"/"+method, &struct{}{}, response)
+	return c.connection.Invoke(ctx, "/"+serviceName+"/"+method, request, response)
 }
