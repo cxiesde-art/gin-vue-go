@@ -26,6 +26,8 @@ Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment.
 
 `BLOG_RATE_LIMIT_REQUESTS` and `BLOG_RATE_LIMIT_WINDOW` configure the gateway's per-client request window. In a multi-instance deployment, place a shared rate limiter at the edge as well; this in-process limiter protects each instance independently.
 
+`BLOG_TRUSTED_PROXIES` optionally accepts a comma-separated list of proxy IPs or CIDRs. Forwarded client addresses are used for rate limiting only when the immediate connection is from one of these proxies; leave it empty when clients connect directly.
+
 `BLOG_DB_MAX_OPEN_CONNS`, `BLOG_DB_MAX_IDLE_CONNS`, and `BLOG_DB_CONN_MAX_LIFETIME` tune each process's database pool for the deployment size.
 
 ## Distributed mode
