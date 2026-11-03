@@ -33,7 +33,10 @@ func main() {
 	var contentClient *contentrpc.Client
 	if cfg.ContentGRPCAddress != "" {
 		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		contentClient, err = contentrpc.Dial(dialContext, cfg.ContentGRPCAddress, logger)
+		contentClient, err = contentrpc.DialWithPolicy(dialContext, cfg.ContentGRPCAddress, logger, contentrpc.RetryPolicy{
+			MaxAttempts:  cfg.ContentGRPCRetryAttempts,
+			InitialDelay: cfg.ContentGRPCRetryDelay,
+		})
 		cancel()
 		if err != nil {
 			logger.Error("connect to content RPC", "address", cfg.ContentGRPCAddress, "error", err)

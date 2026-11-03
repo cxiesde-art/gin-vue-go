@@ -19,6 +19,10 @@ type Client struct {
 }
 
 func Dial(ctx context.Context, address string, logger *slog.Logger) (*Client, error) {
+	return DialWithPolicy(ctx, address, logger, DefaultRetryPolicy)
+}
+
+func DialWithPolicy(ctx context.Context, address string, logger *slog.Logger, policy RetryPolicy) (*Client, error) {
 	connection, err := grpc.DialContext(ctx, address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpcjson.Codec{})),
@@ -27,7 +31,7 @@ func Dial(ctx context.Context, address string, logger *slog.Logger) (*Client, er
 	if err != nil {
 		return nil, err
 	}
-	return &Client{connection: connection, policy: DefaultRetryPolicy}, nil
+	return &Client{connection: connection, policy: policy}, nil
 }
 
 func (c *Client) Close() error { return c.connection.Close() }
