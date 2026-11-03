@@ -40,6 +40,8 @@ The API retries transient gRPC `Unavailable`, `DeadlineExceeded`, and `ResourceE
 
 Admin mutations also create durable audit and outbox records. `GET /api/v1/admin/audit-events` exposes the audit trail, while `GET /api/v1/admin/outbox-events` exposes unpublished events for a publisher worker.
 
+Admin post writes retain immutable revisions. Use `GET /api/v1/admin/posts/:id/revisions` to inspect the newest version first.
+
 ## API examples
 
 Log in to receive a bearer token:

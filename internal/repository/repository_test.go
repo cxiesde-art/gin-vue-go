@@ -57,6 +57,13 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.SavePost(ctx, &post); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.CreatePostRevision(ctx, &model.PostRevision{PostID: post.ID, Title: post.Title, Content: post.Content, Status: post.Status, EditorID: user.ID}); err != nil {
+		t.Fatal(err)
+	}
+	revisions, err := repo.ListPostRevisions(ctx, post.ID)
+	if err != nil || len(revisions) != 1 || revisions[0].Version != 1 {
+		t.Fatalf("unexpected revisions: %#v error=%v", revisions, err)
+	}
 	posts, total, err := repo.ListPosts(ctx, 1, 10, "published")
 	if err != nil || total != 1 || len(posts) != 1 {
 		t.Fatalf("unexpected posts: total=%d posts=%d error=%v", total, len(posts), err)

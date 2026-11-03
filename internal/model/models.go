@@ -76,3 +76,15 @@ type OutboxEvent struct {
 	PublishedAt   *time.Time `json:"publishedAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
+
+type PostRevision struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	PostID    uint      `gorm:"index;not null" json:"postId"`
+	Version   int       `gorm:"not null" json:"version"`
+	Title     string    `gorm:"not null" json:"title"`
+	Excerpt   string    `json:"excerpt"`
+	Content   string    `gorm:"type:text;not null" json:"content"`
+	Status    string    `gorm:"not null" json:"status"`
+	EditorID  uint      `gorm:"index" json:"editorId"`
+	CreatedAt time.Time `json:"createdAt"`
+}

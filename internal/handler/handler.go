@@ -90,6 +90,7 @@ func (h *Handler) Router() *gin.Engine {
 	admin.POST("/posts", h.createPost)
 	admin.PUT("/posts/:id", h.updatePost)
 	admin.DELETE("/posts/:id", h.deletePost)
+	admin.GET("/posts/:id/revisions", h.listPostRevisions)
 	admin.POST("/categories", h.createCategory)
 	admin.POST("/tags", h.createTag)
 	admin.GET("/comments", h.listPendingComments)
@@ -263,6 +264,7 @@ func (h *Handler) createPost(c *gin.Context) {
 		return
 	}
 	h.recordAudit(c, claims.UserID, "post.created", "post", post.ID, map[string]string{"status": post.Status})
+	h.recordRevision(c, claims.UserID, post)
 	c.JSON(http.StatusCreated, post)
 }
 
@@ -296,6 +298,7 @@ func (h *Handler) updatePost(c *gin.Context) {
 	}
 	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
 	h.recordAudit(c, claims.UserID, "post.updated", "post", post.ID, map[string]string{"status": post.Status})
+	h.recordRevision(c, claims.UserID, post)
 	c.JSON(http.StatusOK, post)
 }
 
@@ -315,6 +318,20 @@ func (h *Handler) deletePost(c *gin.Context) {
 	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
 	h.recordAudit(c, claims.UserID, "post.deleted", "post", uint(id), nil)
 	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) listPostRevisions(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+	revisions, err := h.repo.ListPostRevisions(c.Request.Context(), uint(id))
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": revisions})
 }
 
 func (h *Handler) createComment(c *gin.Context) {
@@ -487,5 +504,12 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 	outbox := &model.OutboxEvent{EventType: action, AggregateType: resourceType, AggregateID: resourceID, Payload: string(payload)}
 	if err := h.repo.CreateOutboxEvent(c.Request.Context(), outbox); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write outbox event", "error", err, "action", action, "resource_id", resourceID)
+	}
+}
+
+func (h *Handler) recordRevision(c *gin.Context, editorID uint, post model.Post) {
+	revision := &model.PostRevision{PostID: post.ID, Title: post.Title, Excerpt: post.Excerpt, Content: post.Content, Status: post.Status, EditorID: editorID}
+	if err := h.repo.CreatePostRevision(c.Request.Context(), revision); err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "write post revision", "error", err, "post_id", post.ID)
 	}
 }

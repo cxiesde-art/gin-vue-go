@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/auth"
@@ -55,6 +56,16 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Published", "content": "hello", "status": "published"}, login.Token)
 	if response.Code != http.StatusCreated {
 		t.Fatalf("post creation failed: %d %s", response.Code, response.Body.String())
+	}
+	var createdPost struct {
+		ID uint `json:"id"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &createdPost); err != nil {
+		t.Fatal(err)
+	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/posts/"+strconv.FormatUint(uint64(createdPost.ID), 10)+"/revisions", nil, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"version":1`)) {
+		t.Fatalf("post revision missing: %d %s", response.Code, response.Body.String())
 	}
 	response = request(t, router, http.MethodPost, "/api/v1/admin/categories", map[string]string{"name": "Go"}, login.Token)
 	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"go"`)) {
