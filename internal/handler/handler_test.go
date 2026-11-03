@@ -120,6 +120,21 @@ func (fakeIdentityProvider) Login(context.Context, string, string) (model.User, 
 	return model.User{ID: 9, Email: "remote@example.com", Role: "admin"}, "remote-token", nil
 }
 
+type fakeCommentProvider struct {
+	created bool
+}
+
+func (p *fakeCommentProvider) List(context.Context, uint, bool) ([]model.Comment, error) {
+	return []model.Comment{{ID: 42, Name: "Remote reader", Approved: true}}, nil
+}
+
+func (p *fakeCommentProvider) Create(context.Context, uint, string, string, string) (uint, string, error) {
+	p.created = true
+	return 42, "remote comment accepted", nil
+}
+
+func (p *fakeCommentProvider) Moderate(context.Context, uint, bool) error { return nil }
+
 func (fakeContentReader) ListPosts(context.Context, int, int) ([]model.Post, int64, error) {
 	return []model.Post{{Title: "Remote post"}}, 1, nil
 }
@@ -175,6 +190,21 @@ func TestRemoteIdentityProviderFeedsLoginRoute(t *testing.T) {
 	response := request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]string{"email": "remote@example.com", "password": "secret"}, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"token":"remote-token"`)) {
 		t.Fatalf("gateway did not use remote identity: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteCommentProviderFeedsCommentRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	comments := &fakeCommentProvider{}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithComments(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, comments, logging.NewText("comments-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodPost, "/api/v1/posts/remote/comments", map[string]string{"name": "Reader", "email": "reader@example.com", "body": "Hello"}, "")
+	if response.Code != http.StatusCreated || !comments.created || !bytes.Contains(response.Body.Bytes(), []byte(`"id":42`)) {
+		t.Fatalf("gateway did not use remote comments: %d %s", response.Code, response.Body.String())
 	}
 }
 

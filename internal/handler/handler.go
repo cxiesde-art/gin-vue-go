@@ -42,6 +42,35 @@ type IdentityProvider interface {
 	Login(context.Context, string, string) (model.User, string, error)
 }
 
+type CommentProvider interface {
+	List(context.Context, uint, bool) ([]model.Comment, error)
+	Create(context.Context, uint, string, string, string) (uint, string, error)
+	Moderate(context.Context, uint, bool) error
+}
+
+type localCommentProvider struct {
+	repo *repository.Repository
+}
+
+func (p localCommentProvider) List(ctx context.Context, postID uint, includePending bool) ([]model.Comment, error) {
+	return p.repo.ListComments(ctx, postID, includePending)
+}
+
+func (p localCommentProvider) Create(ctx context.Context, postID uint, name, email, body string) (uint, string, error) {
+	if err := service.ValidateComment(name, email, body); err != nil {
+		return 0, "", status.Error(codes.InvalidArgument, err.Error())
+	}
+	comment := &model.Comment{PostID: postID, Name: strings.TrimSpace(name), Email: strings.TrimSpace(email), Body: strings.TrimSpace(body)}
+	if err := p.repo.CreateComment(ctx, comment); err != nil {
+		return 0, "", err
+	}
+	return comment.ID, "comment submitted for moderation", nil
+}
+
+func (p localCommentProvider) Moderate(ctx context.Context, id uint, approved bool) error {
+	return p.repo.SetCommentApproval(ctx, id, approved)
+}
+
 type localIdentityProvider struct {
 	repo      *repository.Repository
 	jwtSecret string
@@ -65,6 +94,7 @@ type Handler struct {
 	service  *service.BlogService
 	reader   ContentReader
 	identity IdentityProvider
+	comments CommentProvider
 	logger   *slog.Logger
 	metrics  *metrics.Registry
 }
@@ -86,6 +116,10 @@ func NewWithReaderAndMetrics(cfg config.Config, repo *repository.Repository, rea
 }
 
 func NewWithProviders(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithComments(cfg, repo, reader, identity, nil, logger, registry)
+}
+
+func NewWithComments(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -96,7 +130,10 @@ func NewWithProviders(cfg config.Config, repo *repository.Repository, reader Con
 	if identity == nil {
 		identity = localIdentityProvider{repo: repo, jwtSecret: cfg.JWTSecret}
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, logger: logger, metrics: registry}
+	if comments == nil {
+		comments = localCommentProvider{repo: repo}
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -388,12 +425,16 @@ func (h *Handler) createComment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	comment := model.Comment{PostID: post.ID, Name: strings.TrimSpace(input.Name), Email: strings.TrimSpace(input.Email), Body: strings.TrimSpace(input.Body)}
-	if err := h.repo.CreateComment(c.Request.Context(), &comment); err != nil {
+	commentID, message, err := h.comments.Create(c.Request.Context(), post.ID, input.Name, input.Email, input.Body)
+	if status.Code(err) == codes.InvalidArgument {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
 		internalError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": comment.ID, "message": "comment submitted for moderation"})
+	c.JSON(http.StatusCreated, gin.H{"id": commentID, "message": message})
 }
 
 func (h *Handler) listComments(c *gin.Context) {
@@ -406,7 +447,7 @@ func (h *Handler) listComments(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	comments, err := h.repo.ListComments(c.Request.Context(), post.ID, false)
+	comments, err := h.comments.List(c.Request.Context(), post.ID, false)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -415,7 +456,7 @@ func (h *Handler) listComments(c *gin.Context) {
 }
 
 func (h *Handler) listPendingComments(c *gin.Context) {
-	comments, err := h.repo.ListComments(c.Request.Context(), 0, true)
+	comments, err := h.comments.List(c.Request.Context(), 0, true)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -435,7 +476,7 @@ func (h *Handler) approveComment(c *gin.Context) {
 	if !bindJSON(c, &input) {
 		return
 	}
-	if err := h.repo.SetCommentApproval(c.Request.Context(), uint(id), input.Approved); errors.Is(err, repository.ErrNotFound) {
+	if err := h.comments.Moderate(c.Request.Context(), uint(id), input.Approved); isNotFound(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
 		return
 	} else if err != nil {
