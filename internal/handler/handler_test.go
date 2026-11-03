@@ -188,6 +188,10 @@ func (p *fakeAdminPostProvider) Save(_ context.Context, post *model.Post) error 
 
 func (p *fakeAdminPostProvider) Delete(context.Context, uint) error { return nil }
 
+func (p *fakeAdminPostProvider) CreateRevision(context.Context, *model.PostRevision) error {
+	return nil
+}
+
 func (p *fakeAdminPostProvider) ListRevisions(context.Context, uint) ([]model.PostRevision, error) {
 	return []model.PostRevision{{PostID: 44, Version: 1}}, nil
 }

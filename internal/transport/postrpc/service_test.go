@@ -54,11 +54,12 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err != nil || total != 1 || len(items) != 1 {
 		t.Fatalf("unexpected list response: total=%d items=%d error=%v", total, len(items), err)
 	}
-	if err := repo.CreatePostRevision(ctx, &model.PostRevision{PostID: post.ID, Title: post.Title, Content: post.Content, Status: post.Status}); err != nil {
+	revision := &model.PostRevision{PostID: post.ID, Title: post.Title, Content: post.Content, Status: post.Status}
+	if err := client.CreateRevision(ctx, revision); err != nil {
 		t.Fatal(err)
 	}
 	revisions, err := client.ListRevisions(ctx, post.ID)
-	if err != nil || len(revisions) != 1 {
+	if err != nil || len(revisions) != 1 || revisions[0].Version != 1 {
 		t.Fatalf("unexpected revisions: %#v error=%v", revisions, err)
 	}
 	if err := client.Delete(ctx, post.ID); err != nil {

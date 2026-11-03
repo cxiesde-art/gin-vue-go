@@ -76,6 +76,7 @@ type AdminPostProvider interface {
 	Get(context.Context, string) (model.Post, error)
 	Save(context.Context, *model.Post) error
 	Delete(context.Context, uint) error
+	CreateRevision(context.Context, *model.PostRevision) error
 	ListRevisions(context.Context, uint) ([]model.PostRevision, error)
 }
 
@@ -110,6 +111,10 @@ func (p localAdminPostProvider) Save(ctx context.Context, post *model.Post) erro
 
 func (p localAdminPostProvider) Delete(ctx context.Context, postID uint) error {
 	return p.service.DeletePost(ctx, postID)
+}
+
+func (p localAdminPostProvider) CreateRevision(ctx context.Context, revision *model.PostRevision) error {
+	return p.repo.CreatePostRevision(ctx, revision)
 }
 
 func (p localAdminPostProvider) ListRevisions(ctx context.Context, postID uint) ([]model.PostRevision, error) {
@@ -750,7 +755,7 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 
 func (h *Handler) recordRevision(c *gin.Context, editorID uint, post model.Post) {
 	revision := &model.PostRevision{PostID: post.ID, Title: post.Title, Excerpt: post.Excerpt, Content: post.Content, Status: post.Status, EditorID: editorID}
-	if err := h.repo.CreatePostRevision(c.Request.Context(), revision); err != nil {
+	if err := h.posts.CreateRevision(c.Request.Context(), revision); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write post revision", "error", err, "post_id", post.ID)
 	}
 }

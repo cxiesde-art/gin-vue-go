@@ -62,6 +62,18 @@ func (c *Client) Delete(ctx context.Context, postID uint) error {
 	return c.connection.Invoke(ctx, "/"+serviceName+"/Delete", &DeleteRequest{ID: postID}, new(struct{}))
 }
 
+func (c *Client) CreateRevision(ctx context.Context, revision *model.PostRevision) error {
+	if revision == nil {
+		return fmt.Errorf("post revision is required")
+	}
+	response := new(RevisionResponse)
+	if err := c.connection.Invoke(ctx, "/"+serviceName+"/CreateRevision", revision, response); err != nil {
+		return err
+	}
+	*revision = response.Revision
+	return nil
+}
+
 func (c *Client) ListRevisions(ctx context.Context, postID uint) ([]model.PostRevision, error) {
 	response := new(RevisionsResponse)
 	if err := c.connection.Invoke(ctx, "/"+serviceName+"/ListRevisions", &RevisionsRequest{PostID: postID}, response); err != nil {

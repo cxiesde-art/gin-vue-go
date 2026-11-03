@@ -57,6 +57,10 @@ type RevisionsResponse struct {
 	Items []model.PostRevision `json:"items"`
 }
 
+type RevisionResponse struct {
+	Revision model.PostRevision `json:"revision"`
+}
+
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`
@@ -67,6 +71,7 @@ type PostServiceServer interface {
 	Get(context.Context, *GetRequest) (*PostResponse, error)
 	Save(context.Context, *SaveRequest) (*SaveResponse, error)
 	Delete(context.Context, *DeleteRequest) (*struct{}, error)
+	CreateRevision(context.Context, *model.PostRevision) (*RevisionResponse, error)
 	ListRevisions(context.Context, *RevisionsRequest) (*RevisionsResponse, error)
 	Health(context.Context, *struct{}) (*HealthResponse, error)
 }
@@ -133,6 +138,16 @@ func (s *Server) ListRevisions(ctx context.Context, request *RevisionsRequest) (
 	return &RevisionsResponse{Items: items}, nil
 }
 
+func (s *Server) CreateRevision(ctx context.Context, revision *model.PostRevision) (*RevisionResponse, error) {
+	if revision.PostID == 0 || revision.Title == "" || revision.Content == "" || revision.Status == "" {
+		return nil, status.Error(codes.InvalidArgument, "post revision fields are required")
+	}
+	if err := s.repo.CreatePostRevision(ctx, revision); err != nil {
+		return nil, status.Error(codes.Internal, "create post revision failed")
+	}
+	return &RevisionResponse{Revision: *revision}, nil
+}
+
 func (s *Server) Health(context.Context, *struct{}) (*HealthResponse, error) {
 	return &HealthResponse{Status: "ok", Service: "blog-posts"}, nil
 }
@@ -146,6 +161,7 @@ func RegisterServer(server grpc.ServiceRegistrar, implementation PostServiceServ
 			{MethodName: "Get", Handler: getHandler},
 			{MethodName: "Save", Handler: saveHandler},
 			{MethodName: "Delete", Handler: deleteHandler},
+			{MethodName: "CreateRevision", Handler: createRevisionHandler},
 			{MethodName: "ListRevisions", Handler: listRevisionsHandler},
 			{MethodName: "Health", Handler: healthHandler},
 		},
@@ -212,6 +228,17 @@ func listRevisionsHandler(server any, ctx context.Context, decode func(any) erro
 		return server.(PostServiceServer).ListRevisions(ctx, request.(*RevisionsRequest))
 	}
 	return invoke(ctx, request, server, "/"+serviceName+"/ListRevisions", call, interceptor)
+}
+
+func createRevisionHandler(server any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	revision := new(model.PostRevision)
+	if err := decode(revision); err != nil {
+		return nil, err
+	}
+	call := func(ctx context.Context, request any) (any, error) {
+		return server.(PostServiceServer).CreateRevision(ctx, request.(*model.PostRevision))
+	}
+	return invoke(ctx, revision, server, "/"+serviceName+"/CreateRevision", call, interceptor)
 }
 
 func healthHandler(server any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
