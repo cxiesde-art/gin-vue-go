@@ -14,7 +14,8 @@ import (
 )
 
 var ErrInvalidPost = errors.New("title and content are required")
-var slugPattern = regexp.MustCompile(`[^a-z0-9]+`)
+var ErrInvalidStatus = errors.New("status must be draft or published")
+var slugPattern = regexp.MustCompile(`[^\pL\pN]+`)
 
 type BlogService struct {
 	repo *repository.Repository
@@ -42,6 +43,16 @@ func (s *BlogService) ListAllPosts(ctx context.Context, page, pageSize int) ([]m
 	return s.repo.ListPosts(ctx, page, pageSize, "")
 }
 
+func (s *BlogService) SearchPosts(ctx context.Context, query string, page, pageSize int) ([]model.Post, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+	return s.repo.SearchPosts(ctx, query, page, pageSize)
+}
+
 func (s *BlogService) GetPost(ctx context.Context, idOrSlug string, publicOnly bool) (model.Post, error) {
 	post, err := s.repo.FindPost(ctx, idOrSlug, publicOnly)
 	if err != nil {
@@ -62,6 +73,9 @@ func (s *BlogService) SavePost(ctx context.Context, post *model.Post) error {
 	if post.Title == "" || post.Content == "" {
 		return ErrInvalidPost
 	}
+	if post.Status != "" && post.Status != "draft" && post.Status != "published" {
+		return ErrInvalidStatus
+	}
 	if post.Slug == "" {
 		post.Slug = Slugify(post.Title)
 	}
@@ -73,6 +87,10 @@ func (s *BlogService) SavePost(ctx context.Context, post *model.Post) error {
 		post.Status = "draft"
 	}
 	return s.repo.SavePost(ctx, post)
+}
+
+func (s *BlogService) GetPostWithoutView(ctx context.Context, idOrSlug string, publicOnly bool) (model.Post, error) {
+	return s.repo.FindPost(ctx, idOrSlug, publicOnly)
 }
 
 func (s *BlogService) DeletePost(ctx context.Context, id uint) error {

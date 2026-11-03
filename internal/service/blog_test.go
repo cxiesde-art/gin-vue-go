@@ -6,7 +6,7 @@ func TestSlugify(t *testing.T) {
 	for input, expected := range map[string]string{
 		"Hello, Vue Blog!": "hello-vue-blog",
 		"  Go & Gin  ":     "go-gin",
-		"中文文章":             "",
+		"中文文章":             "中文文章",
 	} {
 		if actual := Slugify(input); actual != expected {
 			t.Errorf("Slugify(%q) = %q, want %q", input, actual, expected)

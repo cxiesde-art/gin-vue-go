@@ -55,6 +55,14 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":1`)) {
 		t.Fatalf("published post missing: %d %s", response.Code, response.Body.String())
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/search?q=Published", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":1`)) {
+		t.Fatalf("published post missing from search: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/api/v1/search?q=x", nil, "")
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("short search query should be rejected: %d", response.Code)
+	}
 	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Unauthorized", "content": "no"}, "bad-token")
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized, got %d", response.Code)

@@ -54,6 +54,24 @@ func (r *Repository) ListPosts(ctx context.Context, page, pageSize int, status s
 	return posts, total, err
 }
 
+func (r *Repository) SearchPosts(ctx context.Context, query string, page, pageSize int) ([]model.Post, int64, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []model.Post{}, 0, nil
+	}
+	base := r.db.WithContext(ctx).Model(&model.Post{}).
+		Where("status = ?", "published").
+		Where("title LIKE ? OR excerpt LIKE ? OR content LIKE ?", "%"+query+"%", "%"+query+"%", "%"+query+"%").
+		Preload("Author").Preload("Category").Preload("Tags")
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var posts []model.Post
+	err := base.Order("published_at DESC NULLS LAST, created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&posts).Error
+	return posts, total, err
+}
+
 func (r *Repository) FindPost(ctx context.Context, idOrSlug string, publicOnly bool) (model.Post, error) {
 	query := r.db.WithContext(ctx).Preload("Author").Preload("Category").Preload("Tags")
 	if publicOnly {

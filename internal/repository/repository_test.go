@@ -25,6 +25,10 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err != nil || total != 1 || len(posts) != 1 {
 		t.Fatalf("unexpected posts: total=%d posts=%d error=%v", total, len(posts), err)
 	}
+	results, total, err := repo.SearchPosts(ctx, "body", 1, 10)
+	if err != nil || total != 1 || len(results) != 1 {
+		t.Fatalf("unexpected search results: total=%d results=%d error=%v", total, len(results), err)
+	}
 	found, err := repo.FindPost(ctx, post.Slug, true)
 	if err != nil || found.ID != post.ID {
 		t.Fatalf("lookup by slug failed: %#v error=%v", found, err)

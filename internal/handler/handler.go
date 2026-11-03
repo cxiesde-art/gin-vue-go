@@ -34,6 +34,7 @@ func (h *Handler) Router() *gin.Engine {
 	api := router.Group("/api/v1")
 	api.POST("/auth/login", h.login)
 	api.GET("/posts", h.listPublicPosts)
+	api.GET("/search", h.searchPosts)
 	api.GET("/posts/:identifier", h.getPublicPost)
 	api.POST("/posts/:identifier/comments", h.createComment)
 	api.GET("/posts/:identifier/comments", h.listComments)
@@ -83,6 +84,21 @@ func (h *Handler) listPublicPosts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": posts, "page": page, "pageSize": size, "total": total, "pages": service.PageCount(total, size)})
 }
 
+func (h *Handler) searchPosts(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("q"))
+	if len([]rune(query)) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "q must contain at least 2 characters"})
+		return
+	}
+	page, size := pagination(c)
+	posts, total, err := h.service.SearchPosts(c.Request.Context(), query, page, size)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": posts, "query": query, "page": page, "pageSize": size, "total": total, "pages": service.PageCount(total, size)})
+}
+
 func (h *Handler) listAdminPosts(c *gin.Context) {
 	page, size := pagination(c)
 	posts, total, err := h.service.ListAllPosts(c.Request.Context(), page, size)
@@ -115,7 +131,7 @@ func (h *Handler) createPost(c *gin.Context) {
 	post := input.model()
 	post.AuthorID = claims.UserID
 	if err := h.service.SavePost(c.Request.Context(), &post); err != nil {
-		if errors.Is(err, service.ErrInvalidPost) {
+		if errors.Is(err, service.ErrInvalidPost) || errors.Is(err, service.ErrInvalidStatus) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -146,7 +162,7 @@ func (h *Handler) updatePost(c *gin.Context) {
 	}
 	input.apply(&post)
 	if err := h.service.SavePost(c.Request.Context(), &post); err != nil {
-		if errors.Is(err, service.ErrInvalidPost) {
+		if errors.Is(err, service.ErrInvalidPost) || errors.Is(err, service.ErrInvalidStatus) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -173,7 +189,7 @@ func (h *Handler) deletePost(c *gin.Context) {
 }
 
 func (h *Handler) createComment(c *gin.Context) {
-	post, err := h.service.GetPost(c.Request.Context(), c.Param("identifier"), true)
+	post, err := h.service.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
 	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
@@ -199,7 +215,7 @@ func (h *Handler) createComment(c *gin.Context) {
 }
 
 func (h *Handler) listComments(c *gin.Context) {
-	post, err := h.service.GetPost(c.Request.Context(), c.Param("identifier"), true)
+	post, err := h.service.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
 	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
