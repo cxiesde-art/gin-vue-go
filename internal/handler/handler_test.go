@@ -63,6 +63,17 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &createdPost); err != nil {
 		t.Fatal(err)
 	}
+	postResponse := request(t, router, http.MethodGet, "/api/v1/posts/published", nil, "")
+	if postResponse.Code != http.StatusOK || postResponse.Header().Get("ETag") == "" {
+		t.Fatalf("post ETag missing: %d %s", postResponse.Code, postResponse.Body.String())
+	}
+	conditional := httptest.NewRequest(http.MethodGet, "/api/v1/posts/published", nil)
+	conditional.Header.Set("If-None-Match", postResponse.Header().Get("ETag"))
+	conditionalResponse := httptest.NewRecorder()
+	router.ServeHTTP(conditionalResponse, conditional)
+	if conditionalResponse.Code != http.StatusNotModified {
+		t.Fatalf("conditional post request was not cached: %d", conditionalResponse.Code)
+	}
 	response = request(t, router, http.MethodGet, "/api/v1/admin/posts/"+strconv.FormatUint(uint64(createdPost.ID), 10)+"/revisions", nil, login.Token)
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"version":1`)) {
 		t.Fatalf("post revision missing: %d %s", response.Code, response.Body.String())

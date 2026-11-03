@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -242,6 +244,12 @@ func (h *Handler) getPublicPost(c *gin.Context) {
 	}
 	if err != nil {
 		internalError(c, err)
+		return
+	}
+	etag := postETag(post)
+	c.Header("ETag", etag)
+	if c.GetHeader("If-None-Match") == etag {
+		c.Status(http.StatusNotModified)
 		return
 	}
 	c.JSON(http.StatusOK, post)
@@ -512,4 +520,9 @@ func (h *Handler) recordRevision(c *gin.Context, editorID uint, post model.Post)
 	if err := h.repo.CreatePostRevision(c.Request.Context(), revision); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write post revision", "error", err, "post_id", post.ID)
 	}
+}
+
+func postETag(post model.Post) string {
+	digest := sha256.Sum256([]byte(strconv.FormatUint(uint64(post.ID), 10) + ":" + post.UpdatedAt.UTC().Format(time.RFC3339Nano)))
+	return `"` + hex.EncodeToString(digest[:]) + `"`
 }

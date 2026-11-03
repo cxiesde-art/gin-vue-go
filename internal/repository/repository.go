@@ -112,6 +112,17 @@ func (r *Repository) SavePost(ctx context.Context, post *model.Post) error {
 	return r.db.WithContext(ctx).Save(post).Error
 }
 
+func (r *Repository) IncrementPostView(ctx context.Context, id uint) error {
+	result := r.db.WithContext(ctx).Model(&model.Post{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *Repository) DeletePost(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&model.Post{}, id)
 	if result.Error != nil {

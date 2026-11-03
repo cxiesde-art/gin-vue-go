@@ -60,10 +60,10 @@ func (s *BlogService) GetPost(ctx context.Context, idOrSlug string, publicOnly b
 		return model.Post{}, err
 	}
 	if publicOnly {
-		post.ViewCount++
-		if err := s.repo.SavePost(ctx, &post); err != nil {
+		if err := s.repo.IncrementPostView(ctx, post.ID); err != nil {
 			return model.Post{}, err
 		}
+		post.ViewCount++
 	}
 	return post, nil
 }

@@ -67,6 +67,8 @@ Public clients use `GET /api/v1/posts`, `GET /api/v1/search?q=go`, `GET /api/v1/
 
 Post slugs preserve letters and numbers from non-English titles. Public post detail requests increment the view counter; search, comment submission, and comment listing do not count as reads. Passwords use a random per-password Argon2id salt and never appear in API responses.
 
+Public post detail responses include an `ETag`; clients can send `If-None-Match` to receive `304 Not Modified` when the content has not changed.
+
 ## Development
 
 ```bash
