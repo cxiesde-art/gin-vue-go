@@ -55,6 +55,20 @@ services:
     expose:
       - "9093"
 
+  taxonomy:
+    build:
+      context: .
+      args:
+        BINARY: taxonomy-server
+        COMMAND: ./cmd/taxonomy-server
+    command: ["/app/taxonomy-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9094"
+
   api:
     build: .
     depends_on:
@@ -62,12 +76,14 @@ services:
       - identity
       - comments
       - analytics
+      - taxonomy
     environment:
       BLOG_DATABASE_URL: /data/blog.db
       BLOG_CONTENT_GRPC_ADDRESS: content:9090
       BLOG_IDENTITY_GRPC_ADDRESS: identity:9091
       BLOG_COMMENT_GRPC_ADDRESS: comments:9092
       BLOG_ANALYTICS_GRPC_ADDRESS: analytics:9093
+      BLOG_TAXONOMY_GRPC_ADDRESS: taxonomy:9094
       BLOG_JWT_SECRET: change-this-in-production
     ports:
       - "8080:8080"

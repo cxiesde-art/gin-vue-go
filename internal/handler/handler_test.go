@@ -134,6 +134,18 @@ type fakeCommentProvider struct {
 	created bool
 }
 
+type fakeTaxonomyProvider struct{}
+
+func (fakeTaxonomyProvider) ListCategories(context.Context) ([]model.Category, error) {
+	return []model.Category{{Name: "Remote category", Slug: "remote-category"}}, nil
+}
+
+func (fakeTaxonomyProvider) ListTags(context.Context) ([]model.Tag, error) {
+	return []model.Tag{{Name: "Remote tag", Slug: "remote-tag"}}, nil
+}
+
+func (fakeTaxonomyProvider) Health(context.Context) error { return nil }
+
 func (p *fakeCommentProvider) List(context.Context, uint, bool) ([]model.Comment, error) {
 	return []model.Comment{{ID: 42, Name: "Remote reader", Approved: true}}, nil
 }
@@ -241,6 +253,28 @@ func TestRemoteCommentProviderFeedsCommentRoutes(t *testing.T) {
 	response := request(t, router, http.MethodPost, "/api/v1/posts/remote/comments", map[string]string{"name": "Reader", "email": "reader@example.com", "body": "Hello"}, "")
 	if response.Code != http.StatusCreated || !comments.created || !bytes.Contains(response.Body.Bytes(), []byte(`"id":42`)) {
 		t.Fatalf("gateway did not use remote comments: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteTaxonomyProviderFeedsPublicRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithDependencies(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, nil, nil, fakeTaxonomyProvider{}, logging.NewText("taxonomy-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/categories", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"remote-category"`)) {
+		t.Fatalf("gateway did not use remote taxonomy categories: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/api/v1/tags", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"remote-tag"`)) {
+		t.Fatalf("gateway did not use remote taxonomy tags: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"taxonomy":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote taxonomy: %d %s", response.Code, response.Body.String())
 	}
 }
 

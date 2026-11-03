@@ -18,6 +18,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/authrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/commentrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/taxonomyrpc"
 )
 
 func main() {
@@ -96,8 +97,22 @@ func main() {
 		analytics = analyticsClient
 		logger.Info("using distributed analytics service", "address", cfg.AnalyticsGRPCAddress)
 	}
+	var taxonomy handler.TaxonomyProvider
+	var taxonomyClient *taxonomyrpc.Client
+	if cfg.TaxonomyGRPCAddress != "" {
+		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		taxonomyClient, err = taxonomyrpc.Dial(dialContext, cfg.TaxonomyGRPCAddress, logger)
+		cancel()
+		if err != nil {
+			logger.Error("connect to taxonomy RPC", "address", cfg.TaxonomyGRPCAddress, "error", err)
+			os.Exit(1)
+		}
+		defer taxonomyClient.Close()
+		taxonomy = taxonomyClient
+		logger.Info("using distributed taxonomy service", "address", cfg.TaxonomyGRPCAddress)
+	}
 
-	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithCommentsAndAnalytics(cfg, repo, reader, identity, comments, analytics, logger, metrics.New()).Router()}
+	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithDependencies(cfg, repo, reader, identity, comments, analytics, taxonomy, logger, metrics.New()).Router()}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("blog API listening", "address", cfg.Address, "database", cfg.DatabaseURL)

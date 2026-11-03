@@ -54,6 +54,11 @@ type AnalyticsProvider interface {
 	Stats(context.Context, uint) (int64, error)
 }
 
+type TaxonomyProvider interface {
+	ListCategories(context.Context) ([]model.Category, error)
+	ListTags(context.Context) ([]model.Tag, error)
+}
+
 type localCommentProvider struct {
 	repo *repository.Repository
 }
@@ -130,6 +135,7 @@ type Handler struct {
 	identity  IdentityProvider
 	comments  CommentProvider
 	analytics AnalyticsProvider
+	taxonomy  TaxonomyProvider
 	logger    *slog.Logger
 	metrics   *metrics.Registry
 }
@@ -159,6 +165,10 @@ func NewWithComments(cfg config.Config, repo *repository.Repository, reader Cont
 }
 
 func NewWithCommentsAndAnalytics(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithDependencies(cfg, repo, reader, identity, comments, analytics, nil, logger, registry)
+}
+
+func NewWithDependencies(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -175,7 +185,10 @@ func NewWithCommentsAndAnalytics(cfg config.Config, repo *repository.Repository,
 	if analytics == nil {
 		analytics = localAnalyticsProvider{repo: repo}
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, logger: logger, metrics: registry}
+	if taxonomy == nil {
+		taxonomy = blogService
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -217,8 +230,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics} {
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -289,7 +302,7 @@ func (h *Handler) listAdminPosts(c *gin.Context) {
 }
 
 func (h *Handler) listCategories(c *gin.Context) {
-	categories, err := h.reader.ListCategories(c.Request.Context())
+	categories, err := h.taxonomy.ListCategories(c.Request.Context())
 	if err != nil {
 		internalError(c, err)
 		return
@@ -298,7 +311,7 @@ func (h *Handler) listCategories(c *gin.Context) {
 }
 
 func (h *Handler) listTags(c *gin.Context) {
-	tags, err := h.reader.ListTags(c.Request.Context())
+	tags, err := h.taxonomy.ListTags(c.Request.Context())
 	if err != nil {
 		internalError(c, err)
 		return
