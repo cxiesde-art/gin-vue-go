@@ -1,4 +1,4 @@
-.PHONY: run run-content run-identity run-comments run-analytics run-taxonomy run-worker test coverage fmt vet build build-content build-identity build-comments build-analytics build-taxonomy build-worker
+.PHONY: run run-content run-identity run-comments run-analytics run-taxonomy run-search run-worker test coverage fmt vet build build-content build-identity build-comments build-analytics build-taxonomy build-search build-worker
 
 run:
 	go run ./cmd/server
@@ -17,6 +17,9 @@ run-analytics:
 
 run-taxonomy:
 	go run ./cmd/taxonomy-server
+
+run-search:
+	go run ./cmd/search-server
 
 run-worker:
 	go run ./cmd/outbox-worker
@@ -53,6 +56,9 @@ build-analytics:
 
 build-taxonomy:
 	go build -o bin/taxonomy-server ./cmd/taxonomy-server
+
+build-search:
+	go build -o bin/search-server ./cmd/search-server
 
 build-worker:
 	go build -o bin/outbox-worker ./cmd/outbox-worker

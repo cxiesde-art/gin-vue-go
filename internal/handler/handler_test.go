@@ -146,6 +146,14 @@ func (fakeTaxonomyProvider) ListTags(context.Context) ([]model.Tag, error) {
 
 func (fakeTaxonomyProvider) Health(context.Context) error { return nil }
 
+type fakeSearchProvider struct{}
+
+func (fakeSearchProvider) SearchPosts(context.Context, string, int, int) ([]model.Post, int64, error) {
+	return []model.Post{{Title: "Remote search result", Slug: "remote-search"}}, 1, nil
+}
+
+func (fakeSearchProvider) Health(context.Context) error { return nil }
+
 func (p *fakeCommentProvider) List(context.Context, uint, bool) ([]model.Comment, error) {
 	return []model.Comment{{ID: 42, Name: "Remote reader", Approved: true}}, nil
 }
@@ -275,6 +283,24 @@ func TestRemoteTaxonomyProviderFeedsPublicRoutes(t *testing.T) {
 	response = request(t, router, http.MethodGet, "/readyz", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"taxonomy":"remote"`)) {
 		t.Fatalf("gateway readiness did not check remote taxonomy: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteSearchProviderFeedsSearchRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithServices(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, nil, nil, nil, fakeSearchProvider{}, logging.NewText("search-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/search?q=distributed", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"remote-search"`)) {
+		t.Fatalf("gateway did not use remote search: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"search":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote search: %d %s", response.Code, response.Body.String())
 	}
 }
 

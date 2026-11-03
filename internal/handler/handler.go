@@ -59,6 +59,10 @@ type TaxonomyProvider interface {
 	ListTags(context.Context) ([]model.Tag, error)
 }
 
+type SearchProvider interface {
+	SearchPosts(context.Context, string, int, int) ([]model.Post, int64, error)
+}
+
 type localCommentProvider struct {
 	repo *repository.Repository
 }
@@ -136,6 +140,7 @@ type Handler struct {
 	comments  CommentProvider
 	analytics AnalyticsProvider
 	taxonomy  TaxonomyProvider
+	search    SearchProvider
 	logger    *slog.Logger
 	metrics   *metrics.Registry
 }
@@ -169,6 +174,10 @@ func NewWithCommentsAndAnalytics(cfg config.Config, repo *repository.Repository,
 }
 
 func NewWithDependencies(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithServices(cfg, repo, reader, identity, comments, analytics, taxonomy, nil, logger, registry)
+}
+
+func NewWithServices(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -188,7 +197,10 @@ func NewWithDependencies(cfg config.Config, repo *repository.Repository, reader 
 	if taxonomy == nil {
 		taxonomy = blogService
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, logger: logger, metrics: registry}
+	if search == nil {
+		search = blogService
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -230,8 +242,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy} {
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -283,7 +295,7 @@ func (h *Handler) searchPosts(c *gin.Context) {
 		return
 	}
 	page, size := pagination(c)
-	posts, total, err := h.reader.SearchPosts(c.Request.Context(), query, page, size)
+	posts, total, err := h.search.SearchPosts(c.Request.Context(), query, page, size)
 	if err != nil {
 		internalError(c, err)
 		return

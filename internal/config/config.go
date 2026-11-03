@@ -18,6 +18,7 @@ type Config struct {
 	CommentGRPCAddress       string
 	AnalyticsGRPCAddress     string
 	TaxonomyGRPCAddress      string
+	SearchGRPCAddress        string
 	ContentGRPCRetryAttempts int
 	ContentGRPCRetryDelay    time.Duration
 	MaxBodyBytes             int64
@@ -41,6 +42,7 @@ func FromEnv() Config {
 		CommentGRPCAddress:       env("BLOG_COMMENT_GRPC_ADDRESS", ""),
 		AnalyticsGRPCAddress:     env("BLOG_ANALYTICS_GRPC_ADDRESS", ""),
 		TaxonomyGRPCAddress:      env("BLOG_TAXONOMY_GRPC_ADDRESS", ""),
+		SearchGRPCAddress:        env("BLOG_SEARCH_GRPC_ADDRESS", ""),
 		ContentGRPCRetryAttempts: envInt("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", 3),
 		ContentGRPCRetryDelay:    envDuration("BLOG_CONTENT_GRPC_RETRY_DELAY", 50*time.Millisecond),
 		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),
