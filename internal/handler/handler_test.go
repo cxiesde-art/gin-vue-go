@@ -36,6 +36,10 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":0`)) {
 		t.Fatalf("draft leaked from public list: %d %s", response.Code, response.Body.String())
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/categories", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("category listing failed: %d %s", response.Code, response.Body.String())
+	}
 
 	response = request(t, router, http.MethodPost, "/api/v1/auth/login", map[string]string{"email": cfg.AdminEmail, "password": "admin123"}, "")
 	if response.Code != http.StatusOK {
@@ -50,6 +54,14 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Published", "content": "hello", "status": "published"}, login.Token)
 	if response.Code != http.StatusCreated {
 		t.Fatalf("post creation failed: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/categories", map[string]string{"name": "Go"}, login.Token)
+	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"go"`)) {
+		t.Fatalf("category creation failed: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/tags", map[string]string{"name": "Gin"}, login.Token)
+	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"gin"`)) {
+		t.Fatalf("tag creation failed: %d %s", response.Code, response.Body.String())
 	}
 	response = request(t, router, http.MethodGet, "/api/v1/posts", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":1`)) {

@@ -15,6 +15,7 @@ import (
 
 var ErrInvalidPost = errors.New("title and content are required")
 var ErrInvalidStatus = errors.New("status must be draft or published")
+var ErrInvalidTaxonomy = errors.New("name is required")
 var slugPattern = regexp.MustCompile(`[^\pL\pN]+`)
 
 type BlogService struct {
@@ -95,6 +96,38 @@ func (s *BlogService) GetPostWithoutView(ctx context.Context, idOrSlug string, p
 
 func (s *BlogService) DeletePost(ctx context.Context, id uint) error {
 	return s.repo.DeletePost(ctx, id)
+}
+
+func (s *BlogService) ListCategories(ctx context.Context) ([]model.Category, error) {
+	return s.repo.ListCategories(ctx)
+}
+
+func (s *BlogService) CreateCategory(ctx context.Context, name, slug string) (model.Category, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return model.Category{}, ErrInvalidTaxonomy
+	}
+	if strings.TrimSpace(slug) == "" {
+		slug = Slugify(name)
+	}
+	category := model.Category{Name: name, Slug: slug}
+	return category, s.repo.CreateCategory(ctx, &category)
+}
+
+func (s *BlogService) ListTags(ctx context.Context) ([]model.Tag, error) {
+	return s.repo.ListTags(ctx)
+}
+
+func (s *BlogService) CreateTag(ctx context.Context, name, slug string) (model.Tag, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return model.Tag{}, ErrInvalidTaxonomy
+	}
+	if strings.TrimSpace(slug) == "" {
+		slug = Slugify(name)
+	}
+	tag := model.Tag{Name: name, Slug: slug}
+	return tag, s.repo.CreateTag(ctx, &tag)
 }
 
 func Slugify(value string) string {

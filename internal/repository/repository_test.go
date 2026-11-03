@@ -17,6 +17,20 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.CreateUser(ctx, &user); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.CreateCategory(ctx, &model.Category{Name: "Go", Slug: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateTag(ctx, &model.Tag{Name: "Gin", Slug: "gin"}); err != nil {
+		t.Fatal(err)
+	}
+	categories, err := repo.ListCategories(ctx)
+	if err != nil || len(categories) != 1 {
+		t.Fatalf("unexpected categories: %#v error=%v", categories, err)
+	}
+	tags, err := repo.ListTags(ctx)
+	if err != nil || len(tags) != 1 {
+		t.Fatalf("unexpected tags: %#v error=%v", tags, err)
+	}
 	post := model.Post{Title: "Repository post", Slug: "repository-post", Content: "body", Status: "published", AuthorID: user.ID}
 	if err := repo.SavePost(ctx, &post); err != nil {
 		t.Fatal(err)

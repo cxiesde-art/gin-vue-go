@@ -40,6 +40,26 @@ func (r *Repository) CreateUser(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
+func (r *Repository) ListCategories(ctx context.Context) ([]model.Category, error) {
+	var categories []model.Category
+	err := r.db.WithContext(ctx).Order("name ASC").Find(&categories).Error
+	return categories, err
+}
+
+func (r *Repository) CreateCategory(ctx context.Context, category *model.Category) error {
+	return r.db.WithContext(ctx).Create(category).Error
+}
+
+func (r *Repository) ListTags(ctx context.Context) ([]model.Tag, error) {
+	var tags []model.Tag
+	err := r.db.WithContext(ctx).Order("name ASC").Find(&tags).Error
+	return tags, err
+}
+
+func (r *Repository) CreateTag(ctx context.Context, tag *model.Tag) error {
+	return r.db.WithContext(ctx).Create(tag).Error
+}
+
 func (r *Repository) ListPosts(ctx context.Context, page, pageSize int, status string) ([]model.Post, int64, error) {
 	query := r.db.WithContext(ctx).Model(&model.Post{}).Preload("Author").Preload("Category").Preload("Tags")
 	if status != "" {

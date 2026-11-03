@@ -41,7 +41,7 @@ curl -X POST http://localhost:8080/api/v1/admin/posts \
   -d '{"title":"Hello Vue","content":"# Welcome","status":"published"}'
 ```
 
-Public clients use `GET /api/v1/posts`, `GET /api/v1/search?q=go`, `GET /api/v1/posts/:slug`, `GET /api/v1/posts/:slug/comments`, and `POST /api/v1/posts/:slug/comments`. Search requires at least two characters and only returns published posts. Admin clients use the `/api/v1/admin` routes to manage drafts and approve comments.
+Public clients use `GET /api/v1/posts`, `GET /api/v1/search?q=go`, `GET /api/v1/categories`, `GET /api/v1/tags`, `GET /api/v1/posts/:slug`, `GET /api/v1/posts/:slug/comments`, and `POST /api/v1/posts/:slug/comments`. Search requires at least two characters and only returns published posts. Admin clients use the `/api/v1/admin` routes to manage drafts, categories, tags, and approved comments.
 
 Post slugs preserve letters and numbers from non-English titles. Public post detail requests increment the view counter; search, comment submission, and comment listing do not count as reads. Passwords use a random per-password Argon2id salt and never appear in API responses.
 

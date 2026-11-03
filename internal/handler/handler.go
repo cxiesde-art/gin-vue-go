@@ -35,6 +35,8 @@ func (h *Handler) Router() *gin.Engine {
 	api.POST("/auth/login", h.login)
 	api.GET("/posts", h.listPublicPosts)
 	api.GET("/search", h.searchPosts)
+	api.GET("/categories", h.listCategories)
+	api.GET("/tags", h.listTags)
 	api.GET("/posts/:identifier", h.getPublicPost)
 	api.POST("/posts/:identifier/comments", h.createComment)
 	api.GET("/posts/:identifier/comments", h.listComments)
@@ -44,6 +46,8 @@ func (h *Handler) Router() *gin.Engine {
 	admin.POST("/posts", h.createPost)
 	admin.PUT("/posts/:id", h.updatePost)
 	admin.DELETE("/posts/:id", h.deletePost)
+	admin.POST("/categories", h.createCategory)
+	admin.POST("/tags", h.createTag)
 	admin.GET("/comments", h.listPendingComments)
 	admin.PATCH("/comments/:id", h.approveComment)
 	return router
@@ -107,6 +111,63 @@ func (h *Handler) listAdminPosts(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": posts, "page": page, "pageSize": size, "total": total, "pages": service.PageCount(total, size)})
+}
+
+func (h *Handler) listCategories(c *gin.Context) {
+	categories, err := h.service.ListCategories(c.Request.Context())
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": categories})
+}
+
+func (h *Handler) listTags(c *gin.Context) {
+	tags, err := h.service.ListTags(c.Request.Context())
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": tags})
+}
+
+type taxonomyInput struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+func (h *Handler) createCategory(c *gin.Context) {
+	var input taxonomyInput
+	if !bindJSON(c, &input) {
+		return
+	}
+	category, err := h.service.CreateCategory(c.Request.Context(), input.Name, input.Slug)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidTaxonomy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, category)
+}
+
+func (h *Handler) createTag(c *gin.Context) {
+	var input taxonomyInput
+	if !bindJSON(c, &input) {
+		return
+	}
+	tag, err := h.service.CreateTag(c.Request.Context(), input.Name, input.Slug)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidTaxonomy) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, tag)
 }
 
 func (h *Handler) getPublicPost(c *gin.Context) {
