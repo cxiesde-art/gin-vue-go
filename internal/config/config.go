@@ -15,6 +15,7 @@ type Config struct {
 	ContentGRPCAddress       string
 	ContentGRPCRetryAttempts int
 	ContentGRPCRetryDelay    time.Duration
+	MaxBodyBytes             int64
 }
 
 func FromEnv() Config {
@@ -27,6 +28,7 @@ func FromEnv() Config {
 		ContentGRPCAddress:       env("BLOG_CONTENT_GRPC_ADDRESS", ""),
 		ContentGRPCRetryAttempts: envInt("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", 3),
 		ContentGRPCRetryDelay:    envDuration("BLOG_CONTENT_GRPC_RETRY_DELAY", 50*time.Millisecond),
+		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),
 	}
 }
 
@@ -41,6 +43,14 @@ func envInt(key string, fallback int) int {
 func envDuration(key string, fallback time.Duration) time.Duration {
 	value, err := time.ParseDuration(os.Getenv(key))
 	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func envInt64(key string, fallback int64) int64 {
+	value, err := strconv.ParseInt(os.Getenv(key), 10, 64)
+	if err != nil || value < 1 {
 		return fallback
 	}
 	return value

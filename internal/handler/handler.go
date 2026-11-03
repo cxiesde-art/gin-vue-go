@@ -70,7 +70,7 @@ func NewWithReaderAndMetrics(cfg config.Config, repo *repository.Repository, rea
 
 func (h *Handler) Router() *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Recovery(), logging.HTTPMiddlewareWithMetrics(h.logger, h.metrics))
+	router.Use(gin.Recovery(), middleware.SecurityHeaders(), middleware.BodyLimit(h.cfg.MaxBodyBytes), logging.HTTPMiddlewareWithMetrics(h.logger, h.metrics))
 	router.GET("/healthz", h.health)
 	router.GET("/readyz", h.ready)
 	router.GET("/metrics", h.metrics.Handler)

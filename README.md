@@ -22,6 +22,8 @@ BLOG_ADMIN_PASSWORD=admin123
 
 Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment. Never use the development JWT secret or administrator password in production.
 
+`BLOG_MAX_BODY_BYTES` limits JSON request bodies and defaults to 1 MiB. The API also emits browser security headers on every response.
+
 ## Distributed mode
 
 Run the two-service stack with Docker Compose:
