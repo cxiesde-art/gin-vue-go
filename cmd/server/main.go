@@ -24,6 +24,10 @@ func main() {
 		logger.Error("open database", "error", err)
 		os.Exit(1)
 	}
+	if err := repo.ConfigurePool(cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime); err != nil {
+		logger.Error("configure database pool", "error", err)
+		os.Exit(1)
+	}
 	if err := repo.SeedAdmin(context.Background(), cfg.AdminEmail, auth.HashPassword(cfg.AdminPass)); err != nil {
 		logger.Error("seed administrator", "error", err)
 		os.Exit(1)

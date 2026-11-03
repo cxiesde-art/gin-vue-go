@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -18,17 +17,21 @@ import (
 func main() {
 	cfg := config.FromEnv()
 	address := env("BLOG_CONTENT_GRPC_ADDRESS", ":9090")
+	logger := logging.New("blog-content")
 	repo, err := repository.Open(cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("open content database", "error", err)
+		logger.Error("open content database", "error", err)
+		os.Exit(1)
+	}
+	if err := repo.ConfigurePool(cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime); err != nil {
+		logger.Error("configure content database pool", "error", err)
 		os.Exit(1)
 	}
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		slog.Error("listen for content RPC", "address", address, "error", err)
+		logger.Error("listen for content RPC", "address", address, "error", err)
 		os.Exit(1)
 	}
-	logger := logging.New("blog-content")
 	server := contentrpc.NewGRPCServerWithMetrics(logger, metrics.New())
 	contentrpc.RegisterServer(server, contentrpc.NewServer(repo))
 	logger.InfoContext(context.Background(), "content_rpc_listening", "address", address)

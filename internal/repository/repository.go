@@ -28,6 +28,23 @@ func Open(databaseURL string) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
+func (r *Repository) ConfigurePool(maxOpen, maxIdle int, maxLifetime time.Duration) error {
+	sqlDB, err := r.db.DB()
+	if err != nil {
+		return err
+	}
+	if maxOpen > 0 {
+		sqlDB.SetMaxOpenConns(maxOpen)
+	}
+	if maxIdle > 0 {
+		sqlDB.SetMaxIdleConns(maxIdle)
+	}
+	if maxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(maxLifetime)
+	}
+	return nil
+}
+
 func (r *Repository) DB() *gorm.DB { return r.db }
 
 func (r *Repository) FindUserByEmail(ctx context.Context, email string) (model.User, error) {

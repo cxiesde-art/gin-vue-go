@@ -26,6 +26,8 @@ Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment.
 
 `BLOG_RATE_LIMIT_REQUESTS` and `BLOG_RATE_LIMIT_WINDOW` configure the gateway's per-client request window. In a multi-instance deployment, place a shared rate limiter at the edge as well; this in-process limiter protects each instance independently.
 
+`BLOG_DB_MAX_OPEN_CONNS`, `BLOG_DB_MAX_IDLE_CONNS`, and `BLOG_DB_CONN_MAX_LIFETIME` tune each process's database pool for the deployment size.
+
 ## Distributed mode
 
 Run the two-service stack with Docker Compose:

@@ -22,6 +22,10 @@ func main() {
 		logger.Error("open outbox database", "error", err)
 		os.Exit(1)
 	}
+	if err := repo.ConfigurePool(cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime); err != nil {
+		logger.Error("configure outbox database pool", "error", err)
+		os.Exit(1)
+	}
 	interval := durationEnv("BLOG_OUTBOX_INTERVAL", time.Second)
 	worker := outbox.NewWorker(repo, outbox.NewLogPublisher(logger), logger, interval, 100)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

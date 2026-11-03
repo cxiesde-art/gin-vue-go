@@ -18,6 +18,9 @@ type Config struct {
 	MaxBodyBytes             int64
 	RateLimitRequests        int
 	RateLimitWindow          time.Duration
+	DBMaxOpenConns           int
+	DBMaxIdleConns           int
+	DBConnMaxLifetime        time.Duration
 }
 
 func FromEnv() Config {
@@ -33,6 +36,9 @@ func FromEnv() Config {
 		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),
 		RateLimitRequests:        envInt("BLOG_RATE_LIMIT_REQUESTS", 120),
 		RateLimitWindow:          envDuration("BLOG_RATE_LIMIT_WINDOW", time.Minute),
+		DBMaxOpenConns:           envInt("BLOG_DB_MAX_OPEN_CONNS", 10),
+		DBMaxIdleConns:           envInt("BLOG_DB_MAX_IDLE_CONNS", 5),
+		DBConnMaxLifetime:        envDuration("BLOG_DB_CONN_MAX_LIFETIME", time.Hour),
 	}
 }
 

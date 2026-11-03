@@ -13,6 +13,9 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.ConfigurePool(4, 2, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	user := model.User{Email: "author@example.com", DisplayName: "Author", Role: "admin", PasswordHash: "hash"}
 	if err := repo.CreateUser(ctx, &user); err != nil {
