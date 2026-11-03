@@ -17,7 +17,7 @@ func TestSecurityHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Header().Get("X-Content-Type-Options") != "nosniff" || response.Header().Get("X-Frame-Options") != "DENY" {
+	if response.Header().Get("X-Content-Type-Options") != "nosniff" || response.Header().Get("X-Frame-Options") != "DENY" || response.Header().Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'none'" {
 		t.Fatalf("security headers missing: %#v", response.Header())
 	}
 }
