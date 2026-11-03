@@ -1,7 +1,10 @@
-.PHONY: run test coverage fmt vet build
+.PHONY: run run-content test coverage fmt vet build build-content
 
 run:
 	go run ./cmd/server
+
+run-content:
+	go run ./cmd/content-server
 
 test:
 	go test ./...
@@ -20,3 +23,6 @@ vet:
 
 build:
 	go build -o bin/blog-server ./cmd/server
+
+build-content:
+	go build -o bin/content-server ./cmd/content-server

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -16,12 +17,24 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/service"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+type ContentReader interface {
+	ListPosts(context.Context, int, int) ([]model.Post, int64, error)
+	SearchPosts(context.Context, string, int, int) ([]model.Post, int64, error)
+	GetPost(context.Context, string, bool) (model.Post, error)
+	GetPostWithoutView(context.Context, string, bool) (model.Post, error)
+	ListCategories(context.Context) ([]model.Category, error)
+	ListTags(context.Context) ([]model.Tag, error)
+}
 
 type Handler struct {
 	cfg     config.Config
 	repo    *repository.Repository
 	service *service.BlogService
+	reader  ContentReader
 	logger  *slog.Logger
 }
 
@@ -30,7 +43,15 @@ func New(cfg config.Config, repo *repository.Repository) *Handler {
 }
 
 func NewWithLogger(cfg config.Config, repo *repository.Repository, logger *slog.Logger) *Handler {
-	return &Handler{cfg: cfg, repo: repo, service: service.NewBlogService(repo), logger: logger}
+	return NewWithReader(cfg, repo, nil, logger)
+}
+
+func NewWithReader(cfg config.Config, repo *repository.Repository, reader ContentReader, logger *slog.Logger) *Handler {
+	blogService := service.NewBlogService(repo)
+	if reader == nil {
+		reader = blogService
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, logger: logger}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -87,7 +108,7 @@ func (h *Handler) login(c *gin.Context) {
 
 func (h *Handler) listPublicPosts(c *gin.Context) {
 	page, size := pagination(c)
-	posts, total, err := h.service.ListPosts(c.Request.Context(), page, size)
+	posts, total, err := h.reader.ListPosts(c.Request.Context(), page, size)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -102,7 +123,7 @@ func (h *Handler) searchPosts(c *gin.Context) {
 		return
 	}
 	page, size := pagination(c)
-	posts, total, err := h.service.SearchPosts(c.Request.Context(), query, page, size)
+	posts, total, err := h.reader.SearchPosts(c.Request.Context(), query, page, size)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -121,7 +142,7 @@ func (h *Handler) listAdminPosts(c *gin.Context) {
 }
 
 func (h *Handler) listCategories(c *gin.Context) {
-	categories, err := h.service.ListCategories(c.Request.Context())
+	categories, err := h.reader.ListCategories(c.Request.Context())
 	if err != nil {
 		internalError(c, err)
 		return
@@ -130,7 +151,7 @@ func (h *Handler) listCategories(c *gin.Context) {
 }
 
 func (h *Handler) listTags(c *gin.Context) {
-	tags, err := h.service.ListTags(c.Request.Context())
+	tags, err := h.reader.ListTags(c.Request.Context())
 	if err != nil {
 		internalError(c, err)
 		return
@@ -178,8 +199,8 @@ func (h *Handler) createTag(c *gin.Context) {
 }
 
 func (h *Handler) getPublicPost(c *gin.Context) {
-	post, err := h.service.GetPost(c.Request.Context(), c.Param("identifier"), true)
-	if errors.Is(err, repository.ErrNotFound) {
+	post, err := h.reader.GetPost(c.Request.Context(), c.Param("identifier"), true)
+	if isNotFound(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
@@ -257,8 +278,8 @@ func (h *Handler) deletePost(c *gin.Context) {
 }
 
 func (h *Handler) createComment(c *gin.Context) {
-	post, err := h.service.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
-	if errors.Is(err, repository.ErrNotFound) {
+	post, err := h.reader.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
+	if isNotFound(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
@@ -283,8 +304,8 @@ func (h *Handler) createComment(c *gin.Context) {
 }
 
 func (h *Handler) listComments(c *gin.Context) {
-	post, err := h.service.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
-	if errors.Is(err, repository.ErrNotFound) {
+	post, err := h.reader.GetPostWithoutView(c.Request.Context(), c.Param("identifier"), true)
+	if isNotFound(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
@@ -371,4 +392,8 @@ func pagination(c *gin.Context) (int, int) {
 func internalError(c *gin.Context, err error) {
 	c.Error(err)
 	c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+}
+
+func isNotFound(err error) bool {
+	return errors.Is(err, repository.ErrNotFound) || status.Code(err) == codes.NotFound
 }

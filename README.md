@@ -1,8 +1,8 @@
 # Gin Vue Blog Go
 
-`gin-vue-blog-go` is a small, production-minded Go backend for a Vue blog frontend. It is inspired by the backend responsibilities in [szluyu99/gin-vue-blog](https://github.com/szluyu99/gin-vue-blog), while keeping the implementation independent and focused on a clean API contract.
+`gin-vue-blog-go` is a distributed Go backend for a Vue blog frontend. It is inspired by the backend responsibilities in [szluyu99/gin-vue-blog](https://github.com/szluyu99/gin-vue-blog), while keeping the implementation independent and focused on a clean API contract.
 
-The service provides public post browsing, Markdown-friendly post content, moderation-ready comments, admin CRUD, JWT authentication, role checks, pagination, SQLite persistence, and a health endpoint. GORM migrations run automatically on startup, so a new checkout can be started without a separate database setup step.
+The service provides public post browsing, Markdown-friendly post content, moderation-ready comments, admin CRUD, JWT authentication, role checks, pagination, SQLite persistence, and a health endpoint. Public content reads can run in a separate gRPC content service, while the Gin API handles authentication and writes. Structured JSON logs carry request and trace IDs across HTTP and gRPC. GORM migrations run automatically on startup, so a new checkout can be started without a separate database setup step.
 
 ## Run locally
 
@@ -21,6 +21,16 @@ BLOG_ADMIN_PASSWORD=admin123
 ```
 
 Set `BLOG_DATABASE_URL`, `BLOG_ADDRESS`, and `BLOG_JWT_SECRET` for a deployment. Never use the development JWT secret or administrator password in production.
+
+## Distributed mode
+
+Run the two-service stack with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+The `content` service listens on gRPC `:9090` and owns public content reads. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs.
 
 ## API examples
 
@@ -51,6 +61,7 @@ Post slugs preserve letters and numbers from non-English titles. Public post det
 make fmt
 make vet
 make test
+make build-content
 ```
 
 The CI workflow also runs the test suite with the race detector and writes a coverage profile. The project is intentionally backend-only; a Vue 3 client can consume the versioned JSON API without coupling to the persistence layer.

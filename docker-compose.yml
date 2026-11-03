@@ -1,0 +1,30 @@
+services:
+  content:
+    build:
+      context: .
+      args:
+        BINARY: content-server
+        COMMAND: ./cmd/content-server
+    command: ["/app/content-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9090"
+
+  api:
+    build: .
+    depends_on:
+      - content
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+      BLOG_CONTENT_GRPC_ADDRESS: content:9090
+      BLOG_JWT_SECRET: change-this-in-production
+    ports:
+      - "8080:8080"
+    volumes:
+      - blog-data:/data
+
+volumes:
+  blog-data:

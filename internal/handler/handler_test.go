@@ -10,6 +10,7 @@ import (
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/auth"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -78,6 +79,46 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Unauthorized", "content": "no"}, "bad-token")
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized, got %d", response.Code)
+	}
+}
+
+type fakeContentReader struct{}
+
+func (fakeContentReader) ListPosts(context.Context, int, int) ([]model.Post, int64, error) {
+	return []model.Post{{Title: "Remote post"}}, 1, nil
+}
+
+func (fakeContentReader) SearchPosts(context.Context, string, int, int) ([]model.Post, int64, error) {
+	return []model.Post{{Title: "Remote search result"}}, 1, nil
+}
+
+func (fakeContentReader) GetPost(context.Context, string, bool) (model.Post, error) {
+	return model.Post{Title: "Remote detail"}, nil
+}
+
+func (fakeContentReader) GetPostWithoutView(context.Context, string, bool) (model.Post, error) {
+	return model.Post{ID: 1, Title: "Remote detail"}, nil
+}
+
+func (fakeContentReader) ListCategories(context.Context) ([]model.Category, error) {
+	return []model.Category{{Name: "Remote category"}}, nil
+}
+
+func (fakeContentReader) ListTags(context.Context) ([]model.Tag, error) {
+	return []model.Tag{{Name: "Remote tag"}}, nil
+}
+
+func TestRemoteContentReaderFeedsPublicRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithReader(cfg, repo, fakeContentReader{}, logging.NewText("gateway-test")).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/posts", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"title":"Remote post"`)) {
+		t.Fatalf("gateway did not use remote reader: %d %s", response.Code, response.Body.String())
 	}
 }
 
