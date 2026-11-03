@@ -2,6 +2,7 @@ package contentrpc
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
@@ -78,6 +79,17 @@ func (c *Client) ListTags(ctx context.Context) ([]model.Tag, error) {
 		return nil, err
 	}
 	return response.Tags, nil
+}
+
+func (c *Client) Health(ctx context.Context) error {
+	response := new(HealthResponse)
+	if err := c.invoke(ctx, "Health", &struct{}{}, response); err != nil {
+		return err
+	}
+	if response.Status != "ok" {
+		return fmt.Errorf("content service status is %q", response.Status)
+	}
+	return nil
 }
 
 func (c *Client) taxonomy(ctx context.Context) (*TaxonomyResponse, error) {

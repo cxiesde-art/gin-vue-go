@@ -58,4 +58,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err != nil || len(categories) != 1 || categories[0].Slug != "go" {
 		t.Fatalf("unexpected taxonomy response: %#v error=%v", categories, err)
 	}
+	if err := client.Health(ctx); err != nil {
+		t.Fatalf("health RPC failed: %v", err)
+	}
 }

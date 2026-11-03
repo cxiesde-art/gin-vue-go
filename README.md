@@ -30,7 +30,7 @@ Run the two-service stack with Docker Compose:
 docker compose up --build
 ```
 
-The `content` service listens on gRPC `:9090` and owns public content reads. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs.
+The `content` service listens on gRPC `:9090` and owns public content reads. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
 
 ## API examples
 

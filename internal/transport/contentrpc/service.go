@@ -48,11 +48,17 @@ type TaxonomyResponse struct {
 	Tags       []model.Tag      `json:"tags,omitempty"`
 }
 
+type HealthResponse struct {
+	Status  string `json:"status"`
+	Service string `json:"service"`
+}
+
 type ContentServiceServer interface {
 	ListPosts(context.Context, *ListPostsRequest) (*ListPostsResponse, error)
 	SearchPosts(context.Context, *SearchPostsRequest) (*ListPostsResponse, error)
 	GetPost(context.Context, *GetPostRequest) (*PostResponse, error)
 	ListTaxonomy(context.Context, *struct{}) (*TaxonomyResponse, error)
+	Health(context.Context, *struct{}) (*HealthResponse, error)
 }
 
 type Server struct {
@@ -104,6 +110,10 @@ func (s *Server) ListTaxonomy(ctx context.Context, _ *struct{}) (*TaxonomyRespon
 	return &TaxonomyResponse{Categories: categories, Tags: tags}, nil
 }
 
+func (s *Server) Health(context.Context, *struct{}) (*HealthResponse, error) {
+	return &HealthResponse{Status: "ok", Service: "blog-content"}, nil
+}
+
 func RegisterServer(server grpc.ServiceRegistrar, implementation ContentServiceServer) {
 	server.RegisterService(&grpc.ServiceDesc{
 		ServiceName: serviceName,
@@ -113,6 +123,7 @@ func RegisterServer(server grpc.ServiceRegistrar, implementation ContentServiceS
 			{MethodName: "SearchPosts", Handler: searchPostsHandler},
 			{MethodName: "GetPost", Handler: getPostHandler},
 			{MethodName: "ListTaxonomy", Handler: listTaxonomyHandler},
+			{MethodName: "Health", Handler: healthHandler},
 		},
 	}, implementation)
 }
@@ -188,4 +199,18 @@ func listTaxonomyHandler(server any, ctx context.Context, decode func(any) error
 		return call(ctx, request)
 	}
 	return interceptor(ctx, request, &grpc.UnaryServerInfo{Server: server, FullMethod: "/" + serviceName + "/ListTaxonomy"}, call)
+}
+
+func healthHandler(server any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	request := new(struct{})
+	if err := decode(request); err != nil {
+		return nil, err
+	}
+	call := func(ctx context.Context, request any) (any, error) {
+		return server.(ContentServiceServer).Health(ctx, request.(*struct{}))
+	}
+	if interceptor == nil {
+		return call(ctx, request)
+	}
+	return interceptor(ctx, request, &grpc.UnaryServerInfo{Server: server, FullMethod: "/" + serviceName + "/Health"}, call)
 }

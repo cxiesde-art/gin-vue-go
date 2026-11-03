@@ -108,6 +108,8 @@ func (fakeContentReader) ListTags(context.Context) ([]model.Tag, error) {
 	return []model.Tag{{Name: "Remote tag"}}, nil
 }
 
+func (fakeContentReader) Health(context.Context) error { return nil }
+
 func TestRemoteContentReaderFeedsPublicRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo, err := repository.Open("file::memory:?cache=shared")
@@ -119,6 +121,10 @@ func TestRemoteContentReaderFeedsPublicRoutes(t *testing.T) {
 	response := request(t, router, http.MethodGet, "/api/v1/posts", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"title":"Remote post"`)) {
 		t.Fatalf("gateway did not use remote reader: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"content":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote reader: %d %s", response.Code, response.Body.String())
 	}
 }
 

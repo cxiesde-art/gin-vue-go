@@ -30,6 +30,10 @@ type ContentReader interface {
 	ListTags(context.Context) ([]model.Tag, error)
 }
 
+type ContentHealthChecker interface {
+	Health(context.Context) error
+}
+
 type Handler struct {
 	cfg     config.Config
 	repo    *repository.Repository
@@ -58,6 +62,7 @@ func (h *Handler) Router() *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery(), logging.HTTPMiddleware(h.logger))
 	router.GET("/healthz", h.health)
+	router.GET("/readyz", h.ready)
 
 	api := router.Group("/api/v1")
 	api.POST("/auth/login", h.login)
@@ -83,6 +88,19 @@ func (h *Handler) Router() *gin.Engine {
 
 func (h *Handler) health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "gin-vue-blog-go"})
+}
+
+func (h *Handler) ready(c *gin.Context) {
+	checker, remote := h.reader.(ContentHealthChecker)
+	if !remote {
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "content": "local"})
+		return
+	}
+	if err := checker.Health(c.Request.Context()); err != nil {
+		internalErrorStatus(c, http.StatusServiceUnavailable, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ready", "content": "remote"})
 }
 
 func (h *Handler) login(c *gin.Context) {
@@ -390,8 +408,12 @@ func pagination(c *gin.Context) (int, int) {
 }
 
 func internalError(c *gin.Context, err error) {
+	internalErrorStatus(c, http.StatusInternalServerError, err)
+}
+
+func internalErrorStatus(c *gin.Context, statusCode int, err error) {
 	c.Error(err)
-	c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+	c.JSON(statusCode, gin.H{"error": "internal server error"})
 }
 
 func isNotFound(err error) bool {
