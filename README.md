@@ -84,6 +84,8 @@ make build-content
 
 The CI workflow also runs the test suite with the race detector and writes a coverage profile. The project is intentionally backend-only; a Vue 3 client can consume the versioned JSON API without coupling to the persistence layer.
 
+See [docs/distributed-architecture.md](docs/distributed-architecture.md) for service ownership, trace propagation, failure handling, and the local smoke test.
+
 ## License
 
 MIT
