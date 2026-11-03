@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/glebarez/sqlite"
@@ -21,7 +22,7 @@ func Open(databaseURL string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}, &model.AuditEvent{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}, &model.AuditEvent{}, &model.OutboxEvent{}); err != nil {
 		return nil, err
 	}
 	return &Repository{db: db}, nil
@@ -162,6 +163,30 @@ func (r *Repository) ListAuditEvents(ctx context.Context, page, pageSize int) ([
 	var events []model.AuditEvent
 	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&events).Error
 	return events, total, err
+}
+
+func (r *Repository) CreateOutboxEvent(ctx context.Context, event *model.OutboxEvent) error {
+	return r.db.WithContext(ctx).Create(event).Error
+}
+
+func (r *Repository) ListPendingOutboxEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error) {
+	if limit < 1 || limit > 1000 {
+		limit = 100
+	}
+	var events []model.OutboxEvent
+	err := r.db.WithContext(ctx).Where("published_at IS NULL").Order("created_at ASC").Limit(limit).Find(&events).Error
+	return events, err
+}
+
+func (r *Repository) MarkOutboxPublished(ctx context.Context, id uint, publishedAt time.Time) error {
+	result := r.db.WithContext(ctx).Model(&model.OutboxEvent{}).Where("id = ? AND published_at IS NULL", id).Update("published_at", publishedAt)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repository) SeedAdmin(ctx context.Context, email, passwordHash string) error {

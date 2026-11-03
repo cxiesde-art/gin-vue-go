@@ -68,6 +68,10 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":3`)) {
 		t.Fatalf("audit events missing: %d %s", response.Code, response.Body.String())
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/outbox-events", nil, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"items"`)) {
+		t.Fatalf("outbox events missing: %d %s", response.Code, response.Body.String())
+	}
 	response = request(t, router, http.MethodGet, "/api/v1/posts", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":1`)) {
 		t.Fatalf("published post missing: %d %s", response.Code, response.Body.String())

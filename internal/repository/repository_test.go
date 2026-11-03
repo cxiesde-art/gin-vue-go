@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 )
@@ -25,6 +26,20 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	}
 	if err := repo.CreateAuditEvent(ctx, &model.AuditEvent{RequestID: "request-1", TraceID: "trace-1", Service: "blog-api", Action: "post.created", ResourceType: "post", ResourceID: 1}); err != nil {
 		t.Fatal(err)
+	}
+	if err := repo.CreateOutboxEvent(ctx, &model.OutboxEvent{EventType: "post.created", AggregateType: "post", AggregateID: 1, Payload: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	outbox, err := repo.ListPendingOutboxEvents(ctx, 10)
+	if err != nil || len(outbox) != 1 {
+		t.Fatalf("unexpected pending outbox: %#v error=%v", outbox, err)
+	}
+	if err := repo.MarkOutboxPublished(ctx, outbox[0].ID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	outbox, err = repo.ListPendingOutboxEvents(ctx, 10)
+	if err != nil || len(outbox) != 0 {
+		t.Fatalf("published outbox event remained pending: %#v error=%v", outbox, err)
 	}
 	events, eventTotal, err := repo.ListAuditEvents(ctx, 1, 10)
 	if err != nil || eventTotal != 1 || len(events) != 1 {

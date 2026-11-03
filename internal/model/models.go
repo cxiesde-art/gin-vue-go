@@ -66,3 +66,13 @@ type AuditEvent struct {
 	Metadata     string    `gorm:"type:text" json:"metadata"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
+
+type OutboxEvent struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	EventType     string     `gorm:"index;not null" json:"eventType"`
+	AggregateType string     `gorm:"index;not null" json:"aggregateType"`
+	AggregateID   uint       `gorm:"index;not null" json:"aggregateId"`
+	Payload       string     `gorm:"type:text;not null" json:"payload"`
+	PublishedAt   *time.Time `json:"publishedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+}

@@ -95,6 +95,7 @@ func (h *Handler) Router() *gin.Engine {
 	admin.GET("/comments", h.listPendingComments)
 	admin.PATCH("/comments/:id", h.approveComment)
 	admin.GET("/audit-events", h.listAuditEvents)
+	admin.GET("/outbox-events", h.listOutboxEvents)
 	return router
 }
 
@@ -403,6 +404,15 @@ func (h *Handler) listAuditEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": events, "page": page, "pageSize": size, "total": total, "pages": service.PageCount(total, size)})
 }
 
+func (h *Handler) listOutboxEvents(c *gin.Context) {
+	events, err := h.repo.ListPendingOutboxEvents(c.Request.Context(), 100)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": events})
+}
+
 type postInput struct {
 	Title      string `json:"title"`
 	Slug       string `json:"slug"`
@@ -474,4 +484,8 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 		return
 	}
 	h.metrics.ObserveAudit()
+	outbox := &model.OutboxEvent{EventType: action, AggregateType: resourceType, AggregateID: resourceID, Payload: string(payload)}
+	if err := h.repo.CreateOutboxEvent(c.Request.Context(), outbox); err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "write outbox event", "error", err, "action", action, "resource_id", resourceID)
+	}
 }

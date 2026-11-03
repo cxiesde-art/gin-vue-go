@@ -34,6 +34,8 @@ The `content` service listens on gRPC `:9090` and owns public content reads. The
 
 The API retries transient gRPC `Unavailable`, `DeadlineExceeded`, and `ResourceExhausted` responses with bounded exponential backoff. Set `BLOG_CONTENT_GRPC_RETRY_ATTEMPTS` and `BLOG_CONTENT_GRPC_RETRY_DELAY` (for example `100ms`) to tune the policy. Requests stop immediately on permanent errors or when the caller context is canceled.
 
+Admin mutations also create durable audit and outbox records. `GET /api/v1/admin/audit-events` exposes the audit trail, while `GET /api/v1/admin/outbox-events` exposes unpublished events for a publisher worker.
+
 ## API examples
 
 Log in to receive a bearer token:
