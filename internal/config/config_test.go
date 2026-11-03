@@ -23,3 +23,11 @@ func TestFromEnvUsesSafeDefaultsForInvalidValues(t *testing.T) {
 		t.Fatalf("unexpected defaults: attempts=%d delay=%s", cfg.ContentGRPCRetryAttempts, cfg.ContentGRPCRetryDelay)
 	}
 }
+
+func TestFromEnvParsesTrustedProxies(t *testing.T) {
+	t.Setenv("BLOG_TRUSTED_PROXIES", "10.0.0.0/8, 192.0.2.4")
+	cfg := FromEnv()
+	if len(cfg.TrustedProxies) != 2 || cfg.TrustedProxies[0] != "10.0.0.0/8" || cfg.TrustedProxies[1] != "192.0.2.4" {
+		t.Fatalf("unexpected trusted proxies: %#v", cfg.TrustedProxies)
+	}
+}

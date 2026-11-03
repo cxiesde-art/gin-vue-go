@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,10 +12,11 @@ import (
 )
 
 type RateLimiter struct {
-	mu      sync.Mutex
-	clients map[string]window
-	limit   int
-	period  time.Duration
+	mu             sync.Mutex
+	clients        map[string]window
+	limit          int
+	period         time.Duration
+	trustedProxies []*net.IPNet
 }
 
 type window struct {
@@ -23,18 +25,37 @@ type window struct {
 }
 
 func NewRateLimiter(limit int, period time.Duration) *RateLimiter {
+	return NewRateLimiterWithTrustedProxies(limit, period, nil)
+}
+
+func NewRateLimiterWithTrustedProxies(limit int, period time.Duration, proxies []string) *RateLimiter {
 	if limit < 1 {
 		limit = 60
 	}
 	if period <= 0 {
 		period = time.Minute
 	}
-	return &RateLimiter{clients: make(map[string]window), limit: limit, period: period}
+	trustedProxies := make([]*net.IPNet, 0, len(proxies))
+	for _, proxy := range proxies {
+		if ip := net.ParseIP(strings.TrimSpace(proxy)); ip != nil {
+			bits := 128
+			if ip4 := ip.To4(); ip4 != nil {
+				ip = ip4
+				bits = 32
+			}
+			trustedProxies = append(trustedProxies, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		if _, network, err := net.ParseCIDR(strings.TrimSpace(proxy)); err == nil {
+			trustedProxies = append(trustedProxies, network)
+		}
+	}
+	return &RateLimiter{clients: make(map[string]window), limit: limit, period: period, trustedProxies: trustedProxies}
 }
 
 func (r *RateLimiter) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := clientKey(c)
+		key := clientKey(c, r.trustedProxies)
 		now := time.Now()
 		r.mu.Lock()
 		current := r.clients[key]
@@ -60,11 +81,27 @@ func (r *RateLimiter) Handler() gin.HandlerFunc {
 	}
 }
 
-func clientKey(c *gin.Context) string {
-	if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
-		return strings.TrimSpace(strings.Split(forwarded, ",")[0])
+func clientKey(c *gin.Context, trustedProxies []*net.IPNet) string {
+	remote := strings.TrimSpace(c.Request.RemoteAddr)
+	host, _, err := net.SplitHostPort(remote)
+	if err == nil {
+		remote = host
 	}
-	return c.ClientIP()
+	if ip := net.ParseIP(remote); ip != nil {
+		for _, proxy := range trustedProxies {
+			if proxy.Contains(ip) {
+				forwarded := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-For"), ",")[0])
+				if clientIP := net.ParseIP(forwarded); clientIP != nil {
+					return clientIP.String()
+				}
+				break
+			}
+		}
+	}
+	if remote == "" {
+		return "unknown"
+	}
+	return remote
 }
 
 func formatInt(value int) string {

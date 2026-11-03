@@ -39,3 +39,40 @@ func TestRateLimiterRejectsAfterLimitAndResets(t *testing.T) {
 		t.Fatalf("rate window did not reset: %d", response.Code)
 	}
 }
+
+func TestRateLimiterIgnoresSpoofedForwardedAddressWithoutTrustedProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(NewRateLimiterWithTrustedProxies(1, time.Minute, nil).Handler())
+	router.GET("/", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	for _, forwarded := range []string{"198.51.100.1", "198.51.100.2"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.RemoteAddr = "192.0.2.10:1234"
+		request.Header.Set("X-Forwarded-For", forwarded)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent && forwarded == "198.51.100.1" {
+			t.Fatalf("first request was unexpectedly rejected: %d", response.Code)
+		}
+		if response.Code != http.StatusTooManyRequests && forwarded == "198.51.100.2" {
+			t.Fatalf("spoofed address bypassed rate limit: %d", response.Code)
+		}
+	}
+}
+
+func TestRateLimiterUsesForwardedAddressFromTrustedProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(NewRateLimiterWithTrustedProxies(1, time.Minute, []string{"10.0.0.0/8"}).Handler())
+	router.GET("/", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	for _, forwarded := range []string{"198.51.100.1", "198.51.100.2"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.RemoteAddr = "10.0.0.5:1234"
+		request.Header.Set("X-Forwarded-For", forwarded)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("trusted client %s was unexpectedly rejected: %d", forwarded, response.Code)
+		}
+	}
+}

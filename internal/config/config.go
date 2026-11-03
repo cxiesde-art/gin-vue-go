@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type Config struct {
 	MaxBodyBytes             int64
 	RateLimitRequests        int
 	RateLimitWindow          time.Duration
+	TrustedProxies           []string
 	DBMaxOpenConns           int
 	DBMaxIdleConns           int
 	DBConnMaxLifetime        time.Duration
@@ -36,6 +38,7 @@ func FromEnv() Config {
 		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),
 		RateLimitRequests:        envInt("BLOG_RATE_LIMIT_REQUESTS", 120),
 		RateLimitWindow:          envDuration("BLOG_RATE_LIMIT_WINDOW", time.Minute),
+		TrustedProxies:           envList("BLOG_TRUSTED_PROXIES"),
 		DBMaxOpenConns:           envInt("BLOG_DB_MAX_OPEN_CONNS", 10),
 		DBMaxIdleConns:           envInt("BLOG_DB_MAX_IDLE_CONNS", 5),
 		DBConnMaxLifetime:        envDuration("BLOG_DB_CONN_MAX_LIFETIME", time.Hour),
@@ -71,4 +74,19 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envList(key string) []string {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
