@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
@@ -16,6 +17,7 @@ import (
 type Client struct {
 	connection *grpc.ClientConn
 	policy     RetryPolicy
+	breaker    *CircuitBreaker
 }
 
 func Dial(ctx context.Context, address string, logger *slog.Logger) (*Client, error) {
@@ -31,7 +33,7 @@ func DialWithPolicy(ctx context.Context, address string, logger *slog.Logger, po
 	if err != nil {
 		return nil, err
 	}
-	return &Client{connection: connection, policy: policy}, nil
+	return &Client{connection: connection, policy: policy, breaker: NewCircuitBreaker(5, 5*time.Second)}, nil
 }
 
 func (c *Client) Close() error { return c.connection.Close() }
@@ -109,7 +111,14 @@ func (c *Client) invoke(ctx context.Context, method string, request, response an
 	if logging.RequestID(ctx) == "" {
 		ctx = logging.WithIDs(ctx, logging.NewID(), logging.NewID())
 	}
-	return retryRPC(ctx, c.policy, func() error {
+	if c.breaker != nil && !c.breaker.Allow(time.Now()) {
+		return ErrCircuitOpen
+	}
+	err := retryRPC(ctx, c.policy, func() error {
 		return c.connection.Invoke(ctx, "/"+serviceName+"/"+method, request, response)
 	})
+	if c.breaker != nil {
+		c.breaker.Record(time.Now(), err)
+	}
+	return err
 }

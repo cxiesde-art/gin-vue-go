@@ -38,6 +38,8 @@ The `content` service listens on gRPC `:9090` and owns public content reads. The
 
 The API retries transient gRPC `Unavailable`, `DeadlineExceeded`, and `ResourceExhausted` responses with bounded exponential backoff. Set `BLOG_CONTENT_GRPC_RETRY_ATTEMPTS` and `BLOG_CONTENT_GRPC_RETRY_DELAY` (for example `100ms`) to tune the policy. Requests stop immediately on permanent errors or when the caller context is canceled.
 
+The content client also uses a circuit breaker after repeated failures. It allows one probe after a five-second recovery window and closes again after a successful response.
+
 Admin mutations also create durable audit and outbox records. `GET /api/v1/admin/audit-events` exposes the audit trail, while `GET /api/v1/admin/outbox-events` exposes unpublished events for a publisher worker.
 
 Admin post writes retain immutable revisions. Use `GET /api/v1/admin/posts/:id/revisions` to inspect the newest version first.
