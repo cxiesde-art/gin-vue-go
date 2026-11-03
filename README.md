@@ -38,6 +38,8 @@ docker compose up --build
 
 The `content` service listens on gRPC `:9090` and owns public content reads. The `worker` process publishes pending outbox events. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
 
+The content service enables gRPC reflection for local inspection with tools such as `grpcurl`; keep the service behind the private network in production.
+
 The API retries transient gRPC `Unavailable`, `DeadlineExceeded`, and `ResourceExhausted` responses with bounded exponential backoff. Set `BLOG_CONTENT_GRPC_RETRY_ATTEMPTS` and `BLOG_CONTENT_GRPC_RETRY_DELAY` (for example `100ms`) to tune the policy. Requests stop immediately on permanent errors or when the caller context is canceled.
 
 The content client also uses a circuit breaker after repeated failures. It allows one probe after a five-second recovery window and closes again after a successful response.

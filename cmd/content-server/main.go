@@ -12,6 +12,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -34,6 +35,7 @@ func main() {
 	}
 	server := contentrpc.NewGRPCServerWithMetrics(logger, metrics.New())
 	contentrpc.RegisterServer(server, contentrpc.NewServer(repo))
+	reflection.Register(server)
 	logger.InfoContext(context.Background(), "content_rpc_listening", "address", address)
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.Serve(listener) }()
