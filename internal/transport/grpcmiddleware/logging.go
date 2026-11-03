@@ -6,12 +6,17 @@ import (
 	"time"
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 func UnaryServerLogging(logger *slog.Logger) grpc.UnaryServerInterceptor {
+	return UnaryServerLoggingWithMetrics(logger, nil)
+}
+
+func UnaryServerLoggingWithMetrics(logger *slog.Logger, registry *metrics.Registry) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		ctx = contextWithMetadata(ctx)
 		started := time.Now()
@@ -23,11 +28,18 @@ func UnaryServerLogging(logger *slog.Logger) grpc.UnaryServerInterceptor {
 			"request_id", logging.RequestID(ctx),
 			"trace_id", logging.TraceID(ctx),
 		)
+		if registry != nil {
+			registry.ObserveGRPC(status.Code(err).String())
+		}
 		return response, err
 	}
 }
 
 func UnaryClientLogging(logger *slog.Logger) grpc.UnaryClientInterceptor {
+	return UnaryClientLoggingWithMetrics(logger, nil)
+}
+
+func UnaryClientLoggingWithMetrics(logger *slog.Logger, registry *metrics.Registry) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, request, reply any, conn *grpc.ClientConn, invoker grpc.UnaryInvoker, options ...grpc.CallOption) error {
 		ctx = metadataContext(ctx)
 		started := time.Now()
@@ -39,6 +51,9 @@ func UnaryClientLogging(logger *slog.Logger) grpc.UnaryClientInterceptor {
 			"request_id", logging.RequestID(ctx),
 			"trace_id", logging.TraceID(ctx),
 		)
+		if registry != nil {
+			registry.ObserveGRPC(status.Code(err).String())
+		}
 		return err
 	}
 }

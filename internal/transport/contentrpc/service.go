@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/service"
@@ -129,9 +130,13 @@ func RegisterServer(server grpc.ServiceRegistrar, implementation ContentServiceS
 }
 
 func NewGRPCServer(logger *slog.Logger) *grpc.Server {
+	return NewGRPCServerWithMetrics(logger, nil)
+}
+
+func NewGRPCServerWithMetrics(logger *slog.Logger, registry *metrics.Registry) *grpc.Server {
 	return grpc.NewServer(
 		grpc.ForceServerCodec(grpcjson.Codec{}),
-		grpc.UnaryInterceptor(grpcmiddleware.UnaryServerLogging(logger)),
+		grpc.UnaryInterceptor(grpcmiddleware.UnaryServerLoggingWithMetrics(logger, registry)),
 	)
 }
 

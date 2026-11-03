@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,6 +45,10 @@ func TraceID(ctx context.Context) string {
 }
 
 func HTTPMiddleware(logger *slog.Logger) gin.HandlerFunc {
+	return HTTPMiddlewareWithMetrics(logger, nil)
+}
+
+func HTTPMiddlewareWithMetrics(logger *slog.Logger, registry *metrics.Registry) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
 		requestID := c.GetHeader("X-Request-ID")
@@ -64,6 +69,9 @@ func HTTPMiddleware(logger *slog.Logger) gin.HandlerFunc {
 			"status", c.Writer.Status(),
 			"duration_ms", time.Since(started).Milliseconds(),
 		)
+		if registry != nil {
+			registry.ObserveHTTP(c.Writer.Status(), time.Since(started))
+		}
 	}
 }
 

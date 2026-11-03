@@ -8,6 +8,7 @@ import (
 
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
 )
@@ -26,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 	logger := logging.New("blog-content")
-	server := contentrpc.NewGRPCServer(logger)
+	server := contentrpc.NewGRPCServerWithMetrics(logger, metrics.New())
 	contentrpc.RegisterServer(server, contentrpc.NewServer(repo))
 	logger.InfoContext(context.Background(), "content_rpc_listening", "address", address)
 	if err := server.Serve(listener); err != nil {

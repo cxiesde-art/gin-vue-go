@@ -13,6 +13,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/auth"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/config"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/logging"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/middleware"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
@@ -41,6 +42,7 @@ type Handler struct {
 	service *service.BlogService
 	reader  ContentReader
 	logger  *slog.Logger
+	metrics *metrics.Registry
 }
 
 func New(cfg config.Config, repo *repository.Repository) *Handler {
@@ -52,18 +54,26 @@ func NewWithLogger(cfg config.Config, repo *repository.Repository, logger *slog.
 }
 
 func NewWithReader(cfg config.Config, repo *repository.Repository, reader ContentReader, logger *slog.Logger) *Handler {
+	return NewWithReaderAndMetrics(cfg, repo, reader, logger, metrics.New())
+}
+
+func NewWithReaderAndMetrics(cfg config.Config, repo *repository.Repository, reader ContentReader, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, logger: logger}
+	if registry == nil {
+		registry = metrics.New()
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Recovery(), logging.HTTPMiddleware(h.logger))
+	router.Use(gin.Recovery(), logging.HTTPMiddlewareWithMetrics(h.logger, h.metrics))
 	router.GET("/healthz", h.health)
 	router.GET("/readyz", h.ready)
+	router.GET("/metrics", h.metrics.Handler)
 
 	api := router.Group("/api/v1")
 	api.POST("/auth/login", h.login)
@@ -461,5 +471,7 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 	}
 	if err := h.repo.CreateAuditEvent(c.Request.Context(), event); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write audit event", "error", err, "action", action, "resource_id", resourceID)
+		return
 	}
+	h.metrics.ObserveAudit()
 }
