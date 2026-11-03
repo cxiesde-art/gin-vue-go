@@ -27,15 +27,31 @@ services:
     expose:
       - "9090"
 
+  comments:
+    build:
+      context: .
+      args:
+        BINARY: comment-server
+        COMMAND: ./cmd/comment-server
+    command: ["/app/comment-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9092"
+
   api:
     build: .
     depends_on:
       - content
       - identity
+      - comments
     environment:
       BLOG_DATABASE_URL: /data/blog.db
       BLOG_CONTENT_GRPC_ADDRESS: content:9090
       BLOG_IDENTITY_GRPC_ADDRESS: identity:9091
+      BLOG_COMMENT_GRPC_ADDRESS: comments:9092
       BLOG_JWT_SECRET: change-this-in-production
     ports:
       - "8080:8080"

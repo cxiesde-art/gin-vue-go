@@ -10,10 +10,12 @@ Gin API :8080 ---- gRPC/JSON ----> Identity service :9091
     |
     +---- gRPC/JSON ----> Content service :9090
     |
+    +---- gRPC/JSON ----> Comments service :9092
+    |
     +---- audit_events + outbox_events ----> Outbox worker
 ```
 
-The identity service owns credential verification and token issuance. The API owns admin writes, moderation, audit records, revisions, and outbox records. The content service owns public post, search, category, and tag reads. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
+The identity service owns credential verification and token issuance. The API owns admin writes, audit records, revisions, and outbox records. The content service owns public post, search, category, and tag reads. The comments service owns comment creation, listing, and moderation. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
 
 Each HTTP request receives `X-Request-ID` and `X-Trace-ID` values. The gRPC client forwards both values as metadata, and the content server logs them with the RPC method, status code, and duration. The API exposes Prometheus-compatible counters at `/metrics` and dependency readiness at `/readyz`.
 
