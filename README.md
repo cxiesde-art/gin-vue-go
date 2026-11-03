@@ -38,7 +38,7 @@ Run the two-service stack with Docker Compose:
 docker compose up --build
 ```
 
-The `content` service listens on gRPC `:9090` and owns public content reads. The `worker` process publishes pending outbox events. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` to enable the remote reader. When the variable is empty, the API uses its local service implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
+The `identity` service listens on gRPC `:9091` and owns credential verification and token issuance. The `content` service listens on gRPC `:9090` and owns public content reads. The `worker` process publishes pending outbox events. The Gin API listens on HTTP `:8080`; set `BLOG_CONTENT_GRPC_ADDRESS` and `BLOG_IDENTITY_GRPC_ADDRESS` to enable the remote services. When either variable is empty, the API uses its local implementation, which keeps local development simple. `X-Request-ID` and `X-Trace-ID` are propagated through gRPC metadata and included in structured request logs. Use `/healthz` for process health and `/readyz` for dependency readiness.
 
 The content service enables gRPC reflection for local inspection with tools such as `grpcurl`; keep the service behind the private network in production.
 

@@ -1,4 +1,18 @@
 services:
+  identity:
+    build:
+      context: .
+      args:
+        BINARY: identity-server
+        COMMAND: ./cmd/identity-server
+    command: ["/app/identity-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9091"
+
   content:
     build:
       context: .
@@ -17,9 +31,11 @@ services:
     build: .
     depends_on:
       - content
+      - identity
     environment:
       BLOG_DATABASE_URL: /data/blog.db
       BLOG_CONTENT_GRPC_ADDRESS: content:9090
+      BLOG_IDENTITY_GRPC_ADDRESS: identity:9091
       BLOG_JWT_SECRET: change-this-in-production
     ports:
       - "8080:8080"
