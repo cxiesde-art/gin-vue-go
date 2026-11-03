@@ -15,6 +15,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/analyticsrpc"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/auditrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/authrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/commentrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
@@ -126,8 +127,22 @@ func main() {
 		search = searchClient
 		logger.Info("using distributed search service", "address", cfg.SearchGRPCAddress)
 	}
+	var audit handler.AuditProvider
+	var auditClient *auditrpc.Client
+	if cfg.AuditGRPCAddress != "" {
+		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		auditClient, err = auditrpc.Dial(dialContext, cfg.AuditGRPCAddress, logger)
+		cancel()
+		if err != nil {
+			logger.Error("connect to audit RPC", "address", cfg.AuditGRPCAddress, "error", err)
+			os.Exit(1)
+		}
+		defer auditClient.Close()
+		audit = auditClient
+		logger.Info("using distributed audit service", "address", cfg.AuditGRPCAddress)
+	}
 
-	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithServices(cfg, repo, reader, identity, comments, analytics, taxonomy, search, logger, metrics.New()).Router()}
+	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithServicesAndAudit(cfg, repo, reader, identity, comments, analytics, taxonomy, search, audit, logger, metrics.New()).Router()}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("blog API listening", "address", cfg.Address, "database", cfg.DatabaseURL)

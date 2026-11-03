@@ -63,12 +63,34 @@ type SearchProvider interface {
 	SearchPosts(context.Context, string, int, int) ([]model.Post, int64, error)
 }
 
+type AuditProvider interface {
+	Record(context.Context, *model.AuditEvent, *model.OutboxEvent) error
+	List(context.Context, int, int) ([]model.AuditEvent, int64, error)
+	ListPendingOutbox(context.Context, int) ([]model.OutboxEvent, error)
+}
+
 type localCommentProvider struct {
 	repo *repository.Repository
 }
 
 type localAnalyticsProvider struct {
 	repo *repository.Repository
+}
+
+type localAuditProvider struct {
+	repo *repository.Repository
+}
+
+func (p localAuditProvider) Record(ctx context.Context, audit *model.AuditEvent, outbox *model.OutboxEvent) error {
+	return p.repo.RecordAuditAndOutbox(ctx, audit, outbox)
+}
+
+func (p localAuditProvider) List(ctx context.Context, page, pageSize int) ([]model.AuditEvent, int64, error) {
+	return p.repo.ListAuditEvents(ctx, page, pageSize)
+}
+
+func (p localAuditProvider) ListPendingOutbox(ctx context.Context, limit int) ([]model.OutboxEvent, error) {
+	return p.repo.ListPendingOutboxEvents(ctx, limit)
 }
 
 func (p localAnalyticsProvider) RecordView(ctx context.Context, postID uint) error {
@@ -141,6 +163,7 @@ type Handler struct {
 	analytics AnalyticsProvider
 	taxonomy  TaxonomyProvider
 	search    SearchProvider
+	audit     AuditProvider
 	logger    *slog.Logger
 	metrics   *metrics.Registry
 }
@@ -178,6 +201,10 @@ func NewWithDependencies(cfg config.Config, repo *repository.Repository, reader 
 }
 
 func NewWithServices(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
+	return NewWithServicesAndAudit(cfg, repo, reader, identity, comments, analytics, taxonomy, search, nil, logger, registry)
+}
+
+func NewWithServicesAndAudit(cfg config.Config, repo *repository.Repository, reader ContentReader, identity IdentityProvider, comments CommentProvider, analytics AnalyticsProvider, taxonomy TaxonomyProvider, search SearchProvider, audit AuditProvider, logger *slog.Logger, registry *metrics.Registry) *Handler {
 	blogService := service.NewBlogService(repo)
 	if reader == nil {
 		reader = blogService
@@ -200,7 +227,10 @@ func NewWithServices(cfg config.Config, repo *repository.Repository, reader Cont
 	if search == nil {
 		search = blogService
 	}
-	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, logger: logger, metrics: registry}
+	if audit == nil {
+		audit = localAuditProvider{repo: repo}
+	}
+	return &Handler{cfg: cfg, repo: repo, service: blogService, reader: reader, identity: identity, comments: comments, analytics: analytics, taxonomy: taxonomy, search: search, audit: audit, logger: logger, metrics: registry}
 }
 
 func (h *Handler) Router() *gin.Engine {
@@ -242,8 +272,8 @@ func (h *Handler) health(c *gin.Context) {
 }
 
 func (h *Handler) ready(c *gin.Context) {
-	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local"}
-	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search} {
+	dependencies := gin.H{"content": "local", "identity": "local", "comments": "local", "analytics": "local", "taxonomy": "local", "search": "local", "audit": "local"}
+	for name, dependency := range map[string]any{"content": h.reader, "identity": h.identity, "comments": h.comments, "analytics": h.analytics, "taxonomy": h.taxonomy, "search": h.search, "audit": h.audit} {
 		checker, remote := dependency.(ContentHealthChecker)
 		if !remote {
 			continue
@@ -578,7 +608,7 @@ func (h *Handler) approveComment(c *gin.Context) {
 
 func (h *Handler) listAuditEvents(c *gin.Context) {
 	page, size := pagination(c)
-	events, total, err := h.repo.ListAuditEvents(c.Request.Context(), page, size)
+	events, total, err := h.audit.List(c.Request.Context(), page, size)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -587,7 +617,7 @@ func (h *Handler) listAuditEvents(c *gin.Context) {
 }
 
 func (h *Handler) listOutboxEvents(c *gin.Context) {
-	events, err := h.repo.ListPendingOutboxEvents(c.Request.Context(), 100)
+	events, err := h.audit.ListPendingOutbox(c.Request.Context(), 100)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -668,7 +698,7 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 		Metadata:     string(payload),
 	}
 	outbox := &model.OutboxEvent{EventType: action, AggregateType: resourceType, AggregateID: resourceID, Payload: string(payload)}
-	if err := h.repo.RecordAuditAndOutbox(c.Request.Context(), event, outbox); err != nil {
+	if err := h.audit.Record(c.Request.Context(), event, outbox); err != nil {
 		h.logger.ErrorContext(c.Request.Context(), "write audit and outbox event", "error", err, "action", action, "resource_id", resourceID)
 		return
 	}

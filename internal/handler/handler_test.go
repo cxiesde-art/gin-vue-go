@@ -154,6 +154,25 @@ func (fakeSearchProvider) SearchPosts(context.Context, string, int, int) ([]mode
 
 func (fakeSearchProvider) Health(context.Context) error { return nil }
 
+type fakeAuditProvider struct {
+	recorded bool
+}
+
+func (p *fakeAuditProvider) Record(context.Context, *model.AuditEvent, *model.OutboxEvent) error {
+	p.recorded = true
+	return nil
+}
+
+func (p *fakeAuditProvider) List(context.Context, int, int) ([]model.AuditEvent, int64, error) {
+	return []model.AuditEvent{{Action: "remote.audit"}}, 1, nil
+}
+
+func (p *fakeAuditProvider) ListPendingOutbox(context.Context, int) ([]model.OutboxEvent, error) {
+	return []model.OutboxEvent{{EventType: "remote.audit"}}, nil
+}
+
+func (p *fakeAuditProvider) Health(context.Context) error { return nil }
+
 func (p *fakeCommentProvider) List(context.Context, uint, bool) ([]model.Comment, error) {
 	return []model.Comment{{ID: 42, Name: "Remote reader", Approved: true}}, nil
 }
@@ -301,6 +320,33 @@ func TestRemoteSearchProviderFeedsSearchRoute(t *testing.T) {
 	response = request(t, router, http.MethodGet, "/readyz", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"search":"remote"`)) {
 		t.Fatalf("gateway readiness did not check remote search: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteAuditProviderFeedsAdminRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit := &fakeAuditProvider{}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := NewWithServicesAndAudit(cfg, repo, fakeContentReader{}, fakeIdentityProvider{}, nil, nil, nil, nil, audit, logging.NewText("audit-gateway-test"), nil).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/admin/audit-events", nil, "remote-token")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"action":"remote.audit"`)) {
+		t.Fatalf("gateway did not use remote audit list: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/outbox-events", nil, "remote-token")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"eventType":"remote.audit"`)) {
+		t.Fatalf("gateway did not use remote outbox list: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodPost, "/api/v1/admin/posts", map[string]string{"title": "Remote audit", "content": "body"}, "remote-token")
+	if response.Code != http.StatusCreated || !audit.recorded {
+		t.Fatalf("gateway did not use remote audit record: %d %s", response.Code, response.Body.String())
+	}
+	response = request(t, router, http.MethodGet, "/readyz", nil, "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"audit":"remote"`)) {
+		t.Fatalf("gateway readiness did not check remote audit: %d %s", response.Code, response.Body.String())
 	}
 }
 

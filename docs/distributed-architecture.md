@@ -1,6 +1,6 @@
 # Distributed Architecture
 
-The deployment has seven service processes that share a SQLite volume in the default Compose example. A production deployment can move the database to a managed SQL service without changing the process boundaries.
+The deployment has eight service processes that share a SQLite volume in the default Compose example. A production deployment can move the database to a managed SQL service without changing the process boundaries.
 
 ```text
 Vue client
@@ -18,10 +18,12 @@ Gin API :8080 ---- gRPC/JSON ----> Identity service :9091
     |
     +---- gRPC/JSON ----> Search service :9095
     |
+    +---- gRPC/JSON ----> Audit service :9096
+    |
     +---- audit_events + outbox_events ----> Outbox worker
 ```
 
-The identity service owns credential verification and token issuance. The API owns admin writes, audit records, revisions, and outbox records. The content service owns public post reads. The search service owns full-text post search. The taxonomy service owns category and tag reads. The comments service owns comment creation, listing, and moderation. The analytics service owns durable view events and aggregate view statistics. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
+The identity service owns credential verification and token issuance. The API owns admin writes and revisions. The audit service owns transactional audit and outbox persistence. The content service owns public post reads. The search service owns full-text post search. The taxonomy service owns category and tag reads. The comments service owns comment creation, listing, and moderation. The analytics service owns durable view events and aggregate view statistics. The API falls back to local implementations when the corresponding gRPC address is empty, which makes unit tests and single-process development deterministic.
 
 Each HTTP request receives `X-Request-ID` and `X-Trace-ID` values. The gRPC client forwards both values as metadata, and the content server logs them with the RPC method, status code, and duration. The API exposes Prometheus-compatible counters at `/metrics` and dependency readiness at `/readyz`.
 

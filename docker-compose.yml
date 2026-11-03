@@ -83,6 +83,20 @@ services:
     expose:
       - "9095"
 
+  audit:
+    build:
+      context: .
+      args:
+        BINARY: audit-server
+        COMMAND: ./cmd/audit-server
+    command: ["/app/audit-server"]
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+    volumes:
+      - blog-data:/data
+    expose:
+      - "9096"
+
   api:
     build: .
     depends_on:
@@ -92,6 +106,7 @@ services:
       - analytics
       - taxonomy
       - search
+      - audit
     environment:
       BLOG_DATABASE_URL: /data/blog.db
       BLOG_CONTENT_GRPC_ADDRESS: content:9090
@@ -100,6 +115,7 @@ services:
       BLOG_ANALYTICS_GRPC_ADDRESS: analytics:9093
       BLOG_TAXONOMY_GRPC_ADDRESS: taxonomy:9094
       BLOG_SEARCH_GRPC_ADDRESS: search:9095
+      BLOG_AUDIT_GRPC_ADDRESS: audit:9096
       BLOG_JWT_SECRET: change-this-in-production
     ports:
       - "8080:8080"
