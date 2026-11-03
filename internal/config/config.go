@@ -15,6 +15,7 @@ type Config struct {
 	AdminPass                string
 	ContentGRPCAddress       string
 	IdentityGRPCAddress      string
+	CommentGRPCAddress       string
 	ContentGRPCRetryAttempts int
 	ContentGRPCRetryDelay    time.Duration
 	MaxBodyBytes             int64
@@ -35,6 +36,7 @@ func FromEnv() Config {
 		AdminPass:                env("BLOG_ADMIN_PASSWORD", "admin123"),
 		ContentGRPCAddress:       env("BLOG_CONTENT_GRPC_ADDRESS", ""),
 		IdentityGRPCAddress:      env("BLOG_IDENTITY_GRPC_ADDRESS", ""),
+		CommentGRPCAddress:       env("BLOG_COMMENT_GRPC_ADDRESS", ""),
 		ContentGRPCRetryAttempts: envInt("BLOG_CONTENT_GRPC_RETRY_ATTEMPTS", 3),
 		ContentGRPCRetryDelay:    envDuration("BLOG_CONTENT_GRPC_RETRY_DELAY", 50*time.Millisecond),
 		MaxBodyBytes:             envInt64("BLOG_MAX_BODY_BYTES", 1<<20),

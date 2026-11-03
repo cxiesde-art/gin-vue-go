@@ -15,6 +15,7 @@ import (
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/metrics"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/repository"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/authrpc"
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/commentrpc"
 	"github.com/cxiesde-art/gin-vue-blog-go/internal/transport/contentrpc"
 )
 
@@ -66,8 +67,22 @@ func main() {
 		identity = identityClient
 		logger.Info("using distributed identity service", "address", cfg.IdentityGRPCAddress)
 	}
+	var comments handler.CommentProvider
+	var commentClient *commentrpc.Client
+	if cfg.CommentGRPCAddress != "" {
+		dialContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		commentClient, err = commentrpc.Dial(dialContext, cfg.CommentGRPCAddress, logger)
+		cancel()
+		if err != nil {
+			logger.Error("connect to comments RPC", "address", cfg.CommentGRPCAddress, "error", err)
+			os.Exit(1)
+		}
+		defer commentClient.Close()
+		comments = commentClient
+		logger.Info("using distributed comments service", "address", cfg.CommentGRPCAddress)
+	}
 
-	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithProviders(cfg, repo, reader, identity, logger, metrics.New()).Router()}
+	server := &http.Server{Addr: cfg.Address, Handler: handler.NewWithComments(cfg, repo, reader, identity, comments, logger, metrics.New()).Router()}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("blog API listening", "address", cfg.Address, "database", cfg.DatabaseURL)
