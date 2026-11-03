@@ -1,0 +1,131 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/cxiesde-art/gin-vue-blog-go/internal/model"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+)
+
+var ErrNotFound = gorm.ErrRecordNotFound
+
+type Repository struct {
+	db *gorm.DB
+}
+
+func Open(databaseURL string) (*Repository, error) {
+	db, err := gorm.Open(sqlite.Open(databaseURL), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}); err != nil {
+		return nil, err
+	}
+	return &Repository{db: db}, nil
+}
+
+func (r *Repository) DB() *gorm.DB { return r.db }
+
+func (r *Repository) FindUserByEmail(ctx context.Context, email string) (model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Where("email = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error
+	return user, err
+}
+
+func (r *Repository) CreateUser(ctx context.Context, user *model.User) error {
+	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
+	return r.db.WithContext(ctx).Create(user).Error
+}
+
+func (r *Repository) ListPosts(ctx context.Context, page, pageSize int, status string) ([]model.Post, int64, error) {
+	query := r.db.WithContext(ctx).Model(&model.Post{}).Preload("Author").Preload("Category").Preload("Tags")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var posts []model.Post
+	err := query.Order("published_at DESC NULLS LAST, created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&posts).Error
+	return posts, total, err
+}
+
+func (r *Repository) FindPost(ctx context.Context, idOrSlug string, publicOnly bool) (model.Post, error) {
+	query := r.db.WithContext(ctx).Preload("Author").Preload("Category").Preload("Tags")
+	if publicOnly {
+		query = query.Where("status = ?", "published")
+	}
+	var post model.Post
+	condition := "slug = ?"
+	var value any = idOrSlug
+	if id := parseID(idOrSlug); id > 0 {
+		condition, value = "id = ?", id
+	}
+	err := query.Where(condition, value).First(&post).Error
+	return post, err
+}
+
+func (r *Repository) SavePost(ctx context.Context, post *model.Post) error {
+	return r.db.WithContext(ctx).Save(post).Error
+}
+
+func (r *Repository) DeletePost(ctx context.Context, id uint) error {
+	result := r.db.WithContext(ctx).Delete(&model.Post{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) ListComments(ctx context.Context, postID uint, includePending bool) ([]model.Comment, error) {
+	query := r.db.WithContext(ctx).Order("created_at ASC")
+	if postID > 0 {
+		query = query.Where("post_id = ?", postID)
+	}
+	if !includePending {
+		query = query.Where("approved = ?", true)
+	}
+	var comments []model.Comment
+	return comments, query.Find(&comments).Error
+}
+
+func (r *Repository) CreateComment(ctx context.Context, comment *model.Comment) error {
+	return r.db.WithContext(ctx).Create(comment).Error
+}
+
+func (r *Repository) SetCommentApproval(ctx context.Context, id uint, approved bool) error {
+	result := r.db.WithContext(ctx).Model(&model.Comment{}).Where("id = ?", id).Update("approved", approved)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) SeedAdmin(ctx context.Context, email, passwordHash string) error {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return r.CreateUser(ctx, &model.User{Email: email, PasswordHash: passwordHash, DisplayName: "Administrator", Role: "admin"})
+}
+
+func parseID(value string) uint {
+	var id uint
+	if _, err := fmt.Sscanf(value, "%d", &id); err != nil {
+		return 0
+	}
+	return id
+}
