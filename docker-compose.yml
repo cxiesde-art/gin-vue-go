@@ -26,5 +26,20 @@ services:
     volumes:
       - blog-data:/data
 
+  worker:
+    build:
+      context: .
+      args:
+        BINARY: outbox-worker
+        COMMAND: ./cmd/outbox-worker
+    command: ["/app/outbox-worker"]
+    depends_on:
+      - content
+    environment:
+      BLOG_DATABASE_URL: /data/blog.db
+      BLOG_OUTBOX_INTERVAL: 1s
+    volumes:
+      - blog-data:/data
+
 volumes:
   blog-data:

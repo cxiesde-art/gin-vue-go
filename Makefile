@@ -1,10 +1,13 @@
-.PHONY: run run-content test coverage fmt vet build build-content
+.PHONY: run run-content run-worker test coverage fmt vet build build-content build-worker
 
 run:
 	go run ./cmd/server
 
 run-content:
 	go run ./cmd/content-server
+
+run-worker:
+	go run ./cmd/outbox-worker
 
 test:
 	go test ./...
@@ -26,3 +29,6 @@ build:
 
 build-content:
 	go build -o bin/content-server ./cmd/content-server
+
+build-worker:
+	go build -o bin/outbox-worker ./cmd/outbox-worker
