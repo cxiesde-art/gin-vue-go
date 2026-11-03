@@ -16,3 +16,5 @@ jobs:
       - run: test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
       - run: make coverage
+      - run: make build build-content build-worker
+      - run: docker compose config
