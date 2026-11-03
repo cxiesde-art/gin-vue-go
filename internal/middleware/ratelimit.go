@@ -69,11 +69,20 @@ func (r *RateLimiter) Handler() gin.HandlerFunc {
 		if remaining < 0 {
 			remaining = 0
 		}
+		resetAfter := time.Until(current.started.Add(r.period))
 		r.mu.Unlock()
 
 		c.Header("X-RateLimit-Limit", formatInt(r.limit))
 		c.Header("X-RateLimit-Remaining", formatInt(remaining))
 		if !allowed {
+			seconds := int(resetAfter / time.Second)
+			if resetAfter%time.Second != 0 {
+				seconds++
+			}
+			if seconds < 1 {
+				seconds = 1
+			}
+			c.Header("Retry-After", strconv.Itoa(seconds))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
 			return
 		}

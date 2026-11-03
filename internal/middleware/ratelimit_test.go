@@ -30,6 +30,9 @@ func TestRateLimiterRejectsAfterLimitAndResets(t *testing.T) {
 	if response.Code != http.StatusTooManyRequests {
 		t.Fatalf("third request was accepted: %d", response.Code)
 	}
+	if response.Header().Get("Retry-After") == "" {
+		t.Fatal("rate-limited response did not include Retry-After")
+	}
 	time.Sleep(12 * time.Millisecond)
 	request = httptest.NewRequest(http.MethodGet, "/", nil)
 	request.RemoteAddr = "192.0.2.10:1234"
