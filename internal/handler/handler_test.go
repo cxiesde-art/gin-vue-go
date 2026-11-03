@@ -64,6 +64,10 @@ func TestPublicAndAdminPostFlow(t *testing.T) {
 	if response.Code != http.StatusCreated || !bytes.Contains(response.Body.Bytes(), []byte(`"slug":"gin"`)) {
 		t.Fatalf("tag creation failed: %d %s", response.Code, response.Body.String())
 	}
+	response = request(t, router, http.MethodGet, "/api/v1/admin/audit-events", nil, login.Token)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":3`)) {
+		t.Fatalf("audit events missing: %d %s", response.Code, response.Body.String())
+	}
 	response = request(t, router, http.MethodGet, "/api/v1/posts", nil, "")
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"total":1`)) {
 		t.Fatalf("published post missing: %d %s", response.Code, response.Body.String())

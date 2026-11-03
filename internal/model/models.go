@@ -53,3 +53,16 @@ type Comment struct {
 	Approved  bool      `gorm:"index;not null;default:false" json:"approved"`
 	CreatedAt time.Time `json:"createdAt"`
 }
+
+type AuditEvent struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	RequestID    string    `gorm:"index;not null" json:"requestId"`
+	TraceID      string    `gorm:"index;not null" json:"traceId"`
+	Service      string    `gorm:"not null" json:"service"`
+	ActorID      uint      `gorm:"index" json:"actorId"`
+	Action       string    `gorm:"index;not null" json:"action"`
+	ResourceType string    `gorm:"index;not null" json:"resourceType"`
+	ResourceID   uint      `json:"resourceId"`
+	Metadata     string    `gorm:"type:text" json:"metadata"`
+	CreatedAt    time.Time `json:"createdAt"`
+}

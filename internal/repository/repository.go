@@ -21,7 +21,7 @@ func Open(databaseURL string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Category{}, &model.Tag{}, &model.Post{}, &model.Comment{}, &model.AuditEvent{}); err != nil {
 		return nil, err
 	}
 	return &Repository{db: db}, nil
@@ -147,6 +147,21 @@ func (r *Repository) SetCommentApproval(ctx context.Context, id uint, approved b
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *Repository) CreateAuditEvent(ctx context.Context, event *model.AuditEvent) error {
+	return r.db.WithContext(ctx).Create(event).Error
+}
+
+func (r *Repository) ListAuditEvents(ctx context.Context, page, pageSize int) ([]model.AuditEvent, int64, error) {
+	query := r.db.WithContext(ctx).Model(&model.AuditEvent{})
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var events []model.AuditEvent
+	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&events).Error
+	return events, total, err
 }
 
 func (r *Repository) SeedAdmin(ctx context.Context, email, passwordHash string) error {

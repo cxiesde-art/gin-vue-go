@@ -23,6 +23,13 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.CreateTag(ctx, &model.Tag{Name: "Gin", Slug: "gin"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.CreateAuditEvent(ctx, &model.AuditEvent{RequestID: "request-1", TraceID: "trace-1", Service: "blog-api", Action: "post.created", ResourceType: "post", ResourceID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	events, eventTotal, err := repo.ListAuditEvents(ctx, 1, 10)
+	if err != nil || eventTotal != 1 || len(events) != 1 {
+		t.Fatalf("unexpected audit events: total=%d events=%d error=%v", eventTotal, len(events), err)
+	}
 	categories, err := repo.ListCategories(ctx)
 	if err != nil || len(categories) != 1 {
 		t.Fatalf("unexpected categories: %#v error=%v", categories, err)

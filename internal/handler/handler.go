@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -83,6 +84,7 @@ func (h *Handler) Router() *gin.Engine {
 	admin.POST("/tags", h.createTag)
 	admin.GET("/comments", h.listPendingComments)
 	admin.PATCH("/comments/:id", h.approveComment)
+	admin.GET("/audit-events", h.listAuditEvents)
 	return router
 }
 
@@ -196,6 +198,8 @@ func (h *Handler) createCategory(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	h.recordAudit(c, claims.UserID, "category.created", "category", category.ID, map[string]string{"slug": category.Slug})
 	c.JSON(http.StatusCreated, category)
 }
 
@@ -213,6 +217,8 @@ func (h *Handler) createTag(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	h.recordAudit(c, claims.UserID, "tag.created", "tag", tag.ID, map[string]string{"slug": tag.Slug})
 	c.JSON(http.StatusCreated, tag)
 }
 
@@ -245,6 +251,7 @@ func (h *Handler) createPost(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	h.recordAudit(c, claims.UserID, "post.created", "post", post.ID, map[string]string{"status": post.Status})
 	c.JSON(http.StatusCreated, post)
 }
 
@@ -276,6 +283,8 @@ func (h *Handler) updatePost(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	h.recordAudit(c, claims.UserID, "post.updated", "post", post.ID, map[string]string{"status": post.Status})
 	c.JSON(http.StatusOK, post)
 }
 
@@ -292,6 +301,8 @@ func (h *Handler) deletePost(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	h.recordAudit(c, claims.UserID, "post.deleted", "post", uint(id), nil)
 	c.Status(http.StatusNoContent)
 }
 
@@ -367,7 +378,19 @@ func (h *Handler) approveComment(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	claims := c.MustGet(middleware.ClaimsKey).(auth.Claims)
+	h.recordAudit(c, claims.UserID, "comment.moderated", "comment", uint(id), map[string]string{"approved": strconv.FormatBool(input.Approved)})
 	c.JSON(http.StatusOK, gin.H{"approved": input.Approved})
+}
+
+func (h *Handler) listAuditEvents(c *gin.Context) {
+	page, size := pagination(c)
+	events, total, err := h.repo.ListAuditEvents(c.Request.Context(), page, size)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": events, "page": page, "pageSize": size, "total": total, "pages": service.PageCount(total, size)})
 }
 
 type postInput struct {
@@ -418,4 +441,25 @@ func internalErrorStatus(c *gin.Context, statusCode int, err error) {
 
 func isNotFound(err error) bool {
 	return errors.Is(err, repository.ErrNotFound) || status.Code(err) == codes.NotFound
+}
+
+func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType string, resourceID uint, metadata map[string]string) {
+	payload, err := json.Marshal(metadata)
+	if err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "marshal audit metadata", "error", err, "action", action)
+		return
+	}
+	event := &model.AuditEvent{
+		RequestID:    logging.RequestID(c.Request.Context()),
+		TraceID:      logging.TraceID(c.Request.Context()),
+		Service:      "blog-api",
+		ActorID:      actorID,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Metadata:     string(payload),
+	}
+	if err := h.repo.CreateAuditEvent(c.Request.Context(), event); err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "write audit event", "error", err, "action", action, "resource_id", resourceID)
+	}
 }
