@@ -187,6 +187,30 @@ func TestRemoteContentReaderFeedsPublicRoutes(t *testing.T) {
 	}
 }
 
+func TestPublicPaginationMetadataUsesNormalizedValues(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo, err := repository.Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "test-secret"}
+	router := New(cfg, repo).Router()
+	response := request(t, router, http.MethodGet, "/api/v1/posts?page=0&pageSize=1000", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("post listing failed: %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Page     int `json:"page"`
+		PageSize int `json:"pageSize"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Page != 1 || body.PageSize != 10 {
+		t.Fatalf("pagination metadata was not normalized: %#v", body)
+	}
+}
+
 func TestRemoteIdentityProviderFeedsLoginRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo, err := repository.Open("file::memory:?cache=shared")
