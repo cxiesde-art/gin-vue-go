@@ -504,15 +504,12 @@ func (h *Handler) recordAudit(c *gin.Context, actorID uint, action, resourceType
 		ResourceID:   resourceID,
 		Metadata:     string(payload),
 	}
-	if err := h.repo.CreateAuditEvent(c.Request.Context(), event); err != nil {
-		h.logger.ErrorContext(c.Request.Context(), "write audit event", "error", err, "action", action, "resource_id", resourceID)
+	outbox := &model.OutboxEvent{EventType: action, AggregateType: resourceType, AggregateID: resourceID, Payload: string(payload)}
+	if err := h.repo.RecordAuditAndOutbox(c.Request.Context(), event, outbox); err != nil {
+		h.logger.ErrorContext(c.Request.Context(), "write audit and outbox event", "error", err, "action", action, "resource_id", resourceID)
 		return
 	}
 	h.metrics.ObserveAudit()
-	outbox := &model.OutboxEvent{EventType: action, AggregateType: resourceType, AggregateID: resourceID, Payload: string(payload)}
-	if err := h.repo.CreateOutboxEvent(c.Request.Context(), outbox); err != nil {
-		h.logger.ErrorContext(c.Request.Context(), "write outbox event", "error", err, "action", action, "resource_id", resourceID)
-	}
 }
 
 func (h *Handler) recordRevision(c *gin.Context, editorID uint, post model.Post) {

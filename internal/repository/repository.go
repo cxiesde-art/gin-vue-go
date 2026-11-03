@@ -180,6 +180,15 @@ func (r *Repository) CreateOutboxEvent(ctx context.Context, event *model.OutboxE
 	return r.db.WithContext(ctx).Create(event).Error
 }
 
+func (r *Repository) RecordAuditAndOutbox(ctx context.Context, audit *model.AuditEvent, outbox *model.OutboxEvent) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(audit).Error; err != nil {
+			return err
+		}
+		return tx.Create(outbox).Error
+	})
+}
+
 func (r *Repository) ListPendingOutboxEvents(ctx context.Context, limit int) ([]model.OutboxEvent, error) {
 	if limit < 1 || limit > 1000 {
 		limit = 100

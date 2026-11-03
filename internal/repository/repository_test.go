@@ -30,19 +30,22 @@ func TestRepositoryPostAndCommentLifecycle(t *testing.T) {
 	if err := repo.CreateOutboxEvent(ctx, &model.OutboxEvent{EventType: "post.created", AggregateType: "post", AggregateID: 1, Payload: "{}"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.RecordAuditAndOutbox(ctx, &model.AuditEvent{RequestID: "request-2", TraceID: "trace-2", Service: "blog-api", Action: "post.updated", ResourceType: "post", ResourceID: 1}, &model.OutboxEvent{EventType: "post.updated", AggregateType: "post", AggregateID: 1, Payload: "{}"}); err != nil {
+		t.Fatal(err)
+	}
 	outbox, err := repo.ListPendingOutboxEvents(ctx, 10)
-	if err != nil || len(outbox) != 1 {
+	if err != nil || len(outbox) != 2 {
 		t.Fatalf("unexpected pending outbox: %#v error=%v", outbox, err)
 	}
 	if err := repo.MarkOutboxPublished(ctx, outbox[0].ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	outbox, err = repo.ListPendingOutboxEvents(ctx, 10)
-	if err != nil || len(outbox) != 0 {
+	if err != nil || len(outbox) != 1 {
 		t.Fatalf("published outbox event remained pending: %#v error=%v", outbox, err)
 	}
 	events, eventTotal, err := repo.ListAuditEvents(ctx, 1, 10)
-	if err != nil || eventTotal != 1 || len(events) != 1 {
+	if err != nil || eventTotal != 2 || len(events) != 2 {
 		t.Fatalf("unexpected audit events: total=%d events=%d error=%v", eventTotal, len(events), err)
 	}
 	categories, err := repo.ListCategories(ctx)
